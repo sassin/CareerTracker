@@ -175,6 +175,15 @@ export default function App() {
   const [applicationQuestionDraft, setApplicationQuestionDraft] = useState<ApplicationQuestion>(newApplicationQuestion());
   const [noteDraft, setNoteDraft] = useState<ApplicationNote>(newApplicationNote());
   const [returnToApplication, setReturnToApplication] = useState(false);
+  const draftBaselinesRef = useRef<Record<string, string>>({});
+
+  function rememberDraftBaseline(name: Exclude<ModalName, null>, value: unknown) {
+    draftBaselinesRef.current[name] = JSON.stringify(value);
+  }
+
+  function draftIsDirty(name: Exclude<ModalName, null>, value: unknown) {
+    return draftBaselinesRef.current[name] !== JSON.stringify(value);
+  }
 
   const reload = async () => setData(await repository.load());
 
@@ -355,30 +364,68 @@ export default function App() {
   }
 
   function openCompany(company?: Company) {
-    setCompanyDraft(company ? { ...company } : newCompany());
+    const draft = company ? { ...company } : newCompany();
+    setCompanyDraft(draft);
+    rememberDraftBaseline("company", draft);
     setModal("company");
   }
 
   function openApplication(application?: JobApplication, companyId = "") {
-    setApplicationDraft(application ? { ...application } : newApplication(companyId));
+    const draft = application ? { ...application } : newApplication(companyId);
+    setApplicationDraft(draft);
+    rememberDraftBaseline("application", draft);
     setModal("application");
   }
 
   function openResume(resume?: Resume, fromApplication = false) {
+    const draft = resume ? { ...resume } : newResume();
     setReturnToApplication(fromApplication);
-    setResumeDraft(resume ? { ...resume } : newResume());
+    setResumeDraft(draft);
+    rememberDraftBaseline("resume", draft);
     setModal("resume");
   }
 
   function openTemplate(template?: CoverLetterTemplate) {
-    setTemplateDraft(template ? { ...template } : newCoverLetterTemplate());
+    const draft = template ? { ...template } : newCoverLetterTemplate();
+    setTemplateDraft(draft);
+    rememberDraftBaseline("template", draft);
     setModal("template");
   }
 
   function openLetter(letter?: CoverLetter, companyId = "", fromApplication = false) {
+    const draft = letter ? { ...letter } : newCoverLetter(companyId);
     setReturnToApplication(fromApplication);
-    setLetterDraft(letter ? { ...letter } : newCoverLetter(companyId));
+    setLetterDraft(draft);
+    rememberDraftBaseline("letter", draft);
     setModal("letter");
+  }
+
+  function openQuestion(question?: Question) {
+    const draft = question ? { ...question } : newQuestion();
+    setQuestionDraft(draft);
+    rememberDraftBaseline("question", draft);
+    setModal("question");
+  }
+
+  function openCareerEntry(entry?: CareerEntry) {
+    const draft = entry ? { ...entry } : newCareerEntry();
+    setCareerDraft(draft);
+    rememberDraftBaseline("career", draft);
+    setModal("career");
+  }
+
+  function openApplicationQuestion(question?: ApplicationQuestion) {
+    const draft = question ? { ...question } : newApplicationQuestion(applicationDraft.id);
+    setApplicationQuestionDraft(draft);
+    rememberDraftBaseline("applicationQuestion", draft);
+    setModal("applicationQuestion");
+  }
+
+  function openNote(note?: ApplicationNote) {
+    const draft = note ? { ...note } : newApplicationNote(applicationDraft.id);
+    setNoteDraft(draft);
+    rememberDraftBaseline("note", draft);
+    setModal("note");
   }
 
   async function saveCompany(event: FormEvent) {
@@ -714,6 +761,7 @@ export default function App() {
       };
       setApplicationDraft(next);
       await repository.saveApplication(next);
+      rememberDraftBaseline("application", next);
       await reload();
       setNotice(result.needsChanges ? "Resume review completed. Material changes were suggested." : "Resume review completed. The current resume is a reasonable fit; no new variation is needed.");
     });
@@ -754,6 +802,7 @@ export default function App() {
       const next = { ...applicationDraft, resumeId: applicationDraft.resumeId || resume?.id || "", coverLetterId: id! };
       setApplicationDraft(next);
       await repository.saveApplication(next);
+      rememberDraftBaseline("application", next);
       await reload();
       setNotice("Cover letter created. Review it before use.");
     });
@@ -774,6 +823,7 @@ export default function App() {
       const next = { ...applicationDraft, resumeId: id! };
       setApplicationDraft(next);
       await repository.saveApplication(next);
+      rememberDraftBaseline("application", next);
       await reload();
       setNotice(existing ? "Existing resume variation selected." : "Resume variation saved and linked to this role.");
     });
@@ -834,8 +884,8 @@ export default function App() {
         {view === "applications" && <ApplicationsView data={data} applications={filteredApplications} search={search} setSearch={setSearch} onOpen={(item) => openApplication(item)} onDelete={(item) => deleteItem("application", item.id, "role")} />}
         {view === "companies" && <CompaniesView data={data} onOpen={openCompany} onDelete={(item) => deleteItem("company", item.id, "company and its roles")} />}
         {view === "documents" && <DocumentsView data={data} onUploadCurrent={() => importResume(true)} onAddResume={() => openResume()} onEditResume={openResume} onDeleteResume={(item) => deleteItem("resume", item.id, "resume")} onUploadTemplate={importTemplate} onAddTemplate={() => openTemplate()} onEditTemplate={openTemplate} onDeleteTemplate={(item) => deleteItem("coverLetterTemplate", item.id, "cover letter format")} onSetTemplate={async (id) => { const selected = data.coverLetterTemplates.find((item) => item.id === id); const settings = { ...data.settings, coverLetterTemplateId: id }; await repository.saveSettings(settings); if (selected) { const cloudError = await saveRemoteSnapshot(COVER_LETTER_FORMAT_S3_KEY, selected, settings); if (cloudError) setError(`Cover letter format selected locally. Cloud snapshot failed: ${cloudError}`); } await reload(); }} onAddLetter={() => openLetter()} onEditLetter={openLetter} onDeleteLetter={(item) => deleteItem("coverLetter", item.id, "cover letter")} />}
-        {view === "questions" && <QuestionsView data={data} onAdd={() => { setQuestionDraft(newQuestion()); setModal("question"); }} onEdit={(item) => { setQuestionDraft({ ...item }); setModal("question"); }} onDelete={(item) => deleteItem("question", item.id, "question")} />}
-        {view === "library" && <CareerLibraryView data={data} busy={busy} onSaveProfile={async (summary) => { await repository.saveSettings({ ...data.settings, careerProfileSummary: summary }); await reload(); setNotice("Career profile saved."); }} onGenerateProfile={generateCareerProfile} onAdd={() => { setCareerDraft(newCareerEntry()); setModal("career"); }} onEdit={(item) => { setCareerDraft({ ...item }); setModal("career"); }} onDelete={(item) => deleteItem("careerEntry", item.id, "career entry")} />}
+        {view === "questions" && <QuestionsView data={data} onAdd={() => openQuestion()} onEdit={openQuestion} onDelete={(item) => deleteItem("question", item.id, "question")} />}
+        {view === "library" && <CareerLibraryView data={data} busy={busy} onSaveProfile={async (summary) => { await repository.saveSettings({ ...data.settings, careerProfileSummary: summary }); await reload(); setNotice("Career profile saved."); }} onGenerateProfile={generateCareerProfile} onAdd={() => openCareerEntry()} onEdit={openCareerEntry} onDelete={(item) => deleteItem("careerEntry", item.id, "career entry")} />}
         {view === "settings" && <SettingsView data={data} onReload={reload} setNotice={setNotice} setError={setError} onDirtyChange={setSettingsDirty} />}
       </main>
 
@@ -848,7 +898,7 @@ export default function App() {
           <Field label="Headquarters"><input value={companyDraft.headquarters} onChange={(event) => setCompanyDraft({ ...companyDraft, headquarters: event.target.value })} /></Field>
           <Field label="Products or services" full><textarea rows={3} value={companyDraft.productsServices} onChange={(event) => setCompanyDraft({ ...companyDraft, productsServices: event.target.value })} /></Field>
           <Field label="Notes" full><textarea rows={4} value={companyDraft.notes} onChange={(event) => setCompanyDraft({ ...companyDraft, notes: event.target.value })} /></Field>
-          <FormActions onCancel={() => setModal(null)} extra={<button type="button" className="secondary-button" disabled={busy || !companyDraft.name.trim() || !aiReady} title={aiReady ? "" : "Complete AI setup in Settings"} onClick={fillCompanyWithAi}><Icon name="spark" width="15" />Fill details with AI</button>} />
+          <FormActions saveEnabled={draftIsDirty("company", companyDraft) && Boolean(companyDraft.name.trim())} onCancel={() => setModal(null)} extra={<button type="button" className="secondary-button" disabled={busy || !companyDraft.name.trim() || !aiReady} title={aiReady ? "" : "Complete AI setup in Settings"} onClick={fillCompanyWithAi}><Icon name="spark" width="15" />Fill details with AI</button>} />
         </form>
       </Modal>}
 
@@ -880,22 +930,22 @@ export default function App() {
             {applicationDraft.jobDescription && data.careerEntries.length > 0 && <EvidencePreview data={data} application={applicationDraft} />}
             {applicationDraft.aiAssessment && <div className="review-result"><strong>Assessment</strong><p>{applicationDraft.aiAssessment}</p></div>}
             {applicationDraft.resumeChangeNotes && <Field label="Recommended changes"><textarea rows={4} value={applicationDraft.resumeChangeNotes} onChange={(event) => setApplicationDraft({ ...applicationDraft, resumeChangeNotes: event.target.value })} /></Field>}
-            {applicationDraft.suggestedResumeText && <><Field label="Suggested resume text"><textarea rows={14} value={applicationDraft.suggestedResumeText} onChange={(event) => setApplicationDraft({ ...applicationDraft, suggestedResumeText: event.target.value })} /></Field><button type="button" className="secondary-button" onClick={saveSuggestedResume}>Save as resume variation</button></>}
+            {applicationDraft.suggestedResumeText && <><Field label="Suggested resume text"><textarea rows={14} value={applicationDraft.suggestedResumeText} onChange={(event) => setApplicationDraft({ ...applicationDraft, suggestedResumeText: event.target.value })} /></Field><button type="button" className="secondary-button" disabled={busy || data.resumes.some((item) => item.id === applicationDraft.resumeId && item.editableText === applicationDraft.suggestedResumeText)} onClick={saveSuggestedResume}>Save as resume variation</button></>}
           </section>
 
           <Field label="General notes" full><textarea rows={5} value={applicationDraft.generalNotes} onChange={(event) => setApplicationDraft({ ...applicationDraft, generalNotes: event.target.value })} /></Field>
 
           {data.applications.some((item) => item.id === applicationDraft.id) && <section className="embedded-section full">
-            <div className="section-heading"><div><h3>Application questions</h3></div><button type="button" className="secondary-button" onClick={() => { setApplicationQuestionDraft(newApplicationQuestion(applicationDraft.id)); setModal("applicationQuestion"); }}><Icon name="plus" width="15" />Add question</button></div>
-            {data.applicationQuestions.filter((item) => item.applicationId === applicationDraft.id).map((item) => <div className="mini-record" key={item.id}><div><strong>{item.questionText}</strong><span>{item.submittedAnswer || "No answer recorded"}</span></div><div><button type="button" className="icon-button" onClick={() => { setApplicationQuestionDraft({ ...item }); setModal("applicationQuestion"); }}><Icon name="edit" width="15" /></button><button type="button" className="icon-button danger" onClick={() => deleteItem("applicationQuestion", item.id, "application question", "application")}><Icon name="trash" width="15" /></button></div></div>)}
+            <div className="section-heading"><div><h3>Application questions</h3></div><button type="button" className="secondary-button" onClick={() => openApplicationQuestion()}><Icon name="plus" width="15" />Add question</button></div>
+            {data.applicationQuestions.filter((item) => item.applicationId === applicationDraft.id).map((item) => <div className="mini-record" key={item.id}><div><strong>{item.questionText}</strong><span>{item.submittedAnswer || "No answer recorded"}</span></div><div><button type="button" className="icon-button" onClick={() => openApplicationQuestion(item)}><Icon name="edit" width="15" /></button><button type="button" className="icon-button danger" onClick={() => deleteItem("applicationQuestion", item.id, "application question", "application")}><Icon name="trash" width="15" /></button></div></div>)}
           </section>}
 
           {data.applications.some((item) => item.id === applicationDraft.id) && <section className="embedded-section full">
-            <div className="section-heading"><div><h3>Notes</h3></div><button type="button" className="secondary-button" onClick={() => { setNoteDraft(newApplicationNote(applicationDraft.id)); setModal("note"); }}><Icon name="plus" width="15" />Add note</button></div>
-            {data.notes.filter((item) => item.applicationId === applicationDraft.id).map((item) => <div className="mini-record" key={item.id}><div><strong>{item.title || item.noteType.replace("_", " ")}</strong><span>{item.content}</span></div><div><button type="button" className="icon-button" onClick={() => { setNoteDraft({ ...item }); setModal("note"); }}><Icon name="edit" width="15" /></button><button type="button" className="icon-button danger" onClick={() => deleteItem("note", item.id, "note", "application")}><Icon name="trash" width="15" /></button></div></div>)}
+            <div className="section-heading"><div><h3>Notes</h3></div><button type="button" className="secondary-button" onClick={() => openNote()}><Icon name="plus" width="15" />Add note</button></div>
+            {data.notes.filter((item) => item.applicationId === applicationDraft.id).map((item) => <div className="mini-record" key={item.id}><div><strong>{item.title || item.noteType.replace("_", " ")}</strong><span>{item.content}</span></div><div><button type="button" className="icon-button" onClick={() => openNote(item)}><Icon name="edit" width="15" /></button><button type="button" className="icon-button danger" onClick={() => deleteItem("note", item.id, "note", "application")}><Icon name="trash" width="15" /></button></div></div>)}
           </section>}
 
-          <FormActions onCancel={() => setModal(null)} extra={data.applications.some((item) => item.id === applicationDraft.id) && <button type="button" className="danger-button" onClick={() => deleteItem("application", applicationDraft.id, "role")}><Icon name="trash" width="15" />Delete role</button>} />
+          <FormActions saveEnabled={draftIsDirty("application", applicationDraft)} onCancel={() => setModal(null)} extra={data.applications.some((item) => item.id === applicationDraft.id) && <button type="button" className="danger-button" onClick={() => deleteItem("application", applicationDraft.id, "role")}><Icon name="trash" width="15" />Delete role</button>} />
         </form>
       </Modal>}
 
@@ -905,7 +955,7 @@ export default function App() {
           <Field label="Source format"><select value={resumeDraft.sourceType} onChange={(event) => setResumeDraft({ ...resumeDraft, sourceType: event.target.value as Resume["sourceType"] })}><option value="text">Text</option><option value="latex">LaTeX</option><option value="pdf">Extracted PDF text</option></select></Field>
           <Field label="Resume text" full required><textarea className="code-textarea" rows={20} value={resumeDraft.editableText} onChange={(event) => setResumeDraft({ ...resumeDraft, editableText: event.target.value })} /></Field>
           <Field label="Notes" full><textarea rows={3} value={resumeDraft.notes} onChange={(event) => setResumeDraft({ ...resumeDraft, notes: event.target.value })} /></Field>
-          <FormActions onCancel={() => setModal(null)} extra={data.resumes.some((item) => item.id === resumeDraft.id) && <button type="button" className="danger-button" onClick={() => deleteItem("resume", resumeDraft.id, "resume")}><Icon name="trash" width="15" />Delete</button>} />
+          <FormActions saveEnabled={draftIsDirty("resume", resumeDraft) && Boolean(resumeDraft.name.trim()) && Boolean(resumeDraft.editableText.trim())} onCancel={() => setModal(null)} extra={data.resumes.some((item) => item.id === resumeDraft.id) && <button type="button" className="danger-button" onClick={() => deleteItem("resume", resumeDraft.id, "resume")}><Icon name="trash" width="15" />Delete</button>} />
         </form>
       </Modal>}
 
@@ -916,7 +966,7 @@ export default function App() {
           <Field label="Sample text" full required><textarea className="code-textarea" rows={18} value={templateDraft.editableText} onChange={(event) => setTemplateDraft({ ...templateDraft, editableText: event.target.value })} /></Field>
           <Field label="LaTeX format reference" full><textarea className="code-textarea" rows={12} value={templateDraft.latexText} onChange={(event) => setTemplateDraft({ ...templateDraft, latexText: event.target.value })} /></Field>
           <Field label="Notes" full><textarea rows={3} value={templateDraft.notes} onChange={(event) => setTemplateDraft({ ...templateDraft, notes: event.target.value })} /></Field>
-          <FormActions onCancel={() => setModal(null)} extra={data.coverLetterTemplates.some((item) => item.id === templateDraft.id) && <button type="button" className="danger-button" onClick={() => deleteItem("coverLetterTemplate", templateDraft.id, "cover letter format")}><Icon name="trash" width="15" />Delete</button>} />
+          <FormActions saveEnabled={draftIsDirty("template", templateDraft) && Boolean(templateDraft.name.trim()) && Boolean(templateDraft.editableText.trim())} onCancel={() => setModal(null)} extra={data.coverLetterTemplates.some((item) => item.id === templateDraft.id) && <button type="button" className="danger-button" onClick={() => deleteItem("coverLetterTemplate", templateDraft.id, "cover letter format")}><Icon name="trash" width="15" />Delete</button>} />
         </form>
       </Modal>}
 
@@ -929,7 +979,7 @@ export default function App() {
           <Field label="Cover letter text" full required><textarea rows={18} value={letterDraft.editableText} onChange={(event) => setLetterDraft({ ...letterDraft, editableText: event.target.value })} /></Field>
           <section className="embedded-section full compact-export"><div className="section-heading"><div><h3>PDF export</h3></div><div className="button-row"><button type="button" className="secondary-button" disabled={!letterDraft.editableText.trim()} onClick={exportLetterPdf}><Icon name="file" width="15" />Export PDF</button>{letterDraft.pdfPath && data.settings.storageMode !== "s3" && <button type="button" className="text-button" onClick={() => openLocalPath(letterDraft.pdfPath)}>Open PDF</button>}</div></div></section>
           <Field label="Notes" full><textarea rows={3} value={letterDraft.notes} onChange={(event) => setLetterDraft({ ...letterDraft, notes: event.target.value })} /></Field>
-          <FormActions onCancel={() => setModal(null)} extra={data.coverLetters.some((item) => item.id === letterDraft.id) && <button type="button" className="danger-button" onClick={() => deleteItem("coverLetter", letterDraft.id, "cover letter")}><Icon name="trash" width="15" />Delete</button>} />
+          <FormActions saveEnabled={draftIsDirty("letter", letterDraft) && Boolean(letterDraft.companyId) && Boolean(letterDraft.name.trim()) && Boolean(letterDraft.editableText.trim())} onCancel={() => setModal(null)} extra={data.coverLetters.some((item) => item.id === letterDraft.id) && <button type="button" className="danger-button" onClick={() => deleteItem("coverLetter", letterDraft.id, "cover letter")}><Icon name="trash" width="15" />Delete</button>} />
         </form>
       </Modal>}
 
@@ -939,7 +989,7 @@ export default function App() {
           <Field label="Question" full required><textarea rows={4} value={questionDraft.questionText} onChange={(event) => setQuestionDraft({ ...questionDraft, questionText: event.target.value })} /></Field>
           <Field label="Reusable answer" full><textarea rows={8} value={questionDraft.reusableAnswer} onChange={(event) => setQuestionDraft({ ...questionDraft, reusableAnswer: event.target.value })} /></Field>
           <Field label="Notes" full><textarea rows={3} value={questionDraft.notes} onChange={(event) => setQuestionDraft({ ...questionDraft, notes: event.target.value })} /></Field>
-          <FormActions onCancel={() => setModal(null)} />
+          <FormActions saveEnabled={draftIsDirty("question", questionDraft) && Boolean(questionDraft.questionText.trim()) && (questionDraft.scope === "generic" || Boolean(questionDraft.companyId))} onCancel={() => setModal(null)} />
         </form>
       </Modal>}
 
@@ -961,7 +1011,7 @@ export default function App() {
             </div>
           </details>
           <Field label="Notes" full><textarea rows={3} value={careerDraft.notes} onChange={(event) => setCareerDraft({ ...careerDraft, notes: event.target.value })} /></Field>
-          <FormActions onCancel={() => setModal(null)} extra={data.careerEntries.some((item) => item.id === careerDraft.id) && <button type="button" className="danger-button" onClick={() => deleteItem("careerEntry", careerDraft.id, "career entry")}><Icon name="trash" width="15" />Delete</button>} />
+          <FormActions saveEnabled={draftIsDirty("career", careerDraft) && Boolean(careerDraft.title.trim())} onCancel={() => setModal(null)} extra={data.careerEntries.some((item) => item.id === careerDraft.id) && <button type="button" className="danger-button" onClick={() => deleteItem("careerEntry", careerDraft.id, "career entry")}><Icon name="trash" width="15" />Delete</button>} />
         </form>
       </Modal>}
 
@@ -971,7 +1021,7 @@ export default function App() {
           <Field label="Exact question" full required><textarea rows={4} value={applicationQuestionDraft.questionText} onChange={(event) => setApplicationQuestionDraft({ ...applicationQuestionDraft, questionText: event.target.value })} /></Field>
           <Field label="Submitted answer" full><textarea rows={10} value={applicationQuestionDraft.submittedAnswer} onChange={(event) => setApplicationQuestionDraft({ ...applicationQuestionDraft, submittedAnswer: event.target.value })} /></Field>
           <Field label="Word or character limit"><input value={applicationQuestionDraft.responseLimit} onChange={(event) => setApplicationQuestionDraft({ ...applicationQuestionDraft, responseLimit: event.target.value })} /></Field>
-          <FormActions onCancel={() => setModal("application")} />
+          <FormActions saveEnabled={draftIsDirty("applicationQuestion", applicationQuestionDraft) && Boolean(applicationQuestionDraft.questionText.trim())} onCancel={() => setModal("application")} />
         </form>
       </Modal>}
 
@@ -980,7 +1030,7 @@ export default function App() {
           <Field label="Type"><select value={noteDraft.noteType} onChange={(event) => setNoteDraft({ ...noteDraft, noteType: event.target.value as ApplicationNote["noteType"] })}><option value="general">General</option><option value="hr">HR / Recruiter</option><option value="hiring_manager">Hiring Manager</option><option value="referral">Referral</option></select></Field>
           <Field label="Title"><input value={noteDraft.title} onChange={(event) => setNoteDraft({ ...noteDraft, title: event.target.value })} /></Field>
           <Field label="Content" full required><textarea rows={12} value={noteDraft.content} onChange={(event) => setNoteDraft({ ...noteDraft, content: event.target.value })} /></Field>
-          <FormActions onCancel={() => setModal("application")} />
+          <FormActions saveEnabled={draftIsDirty("note", noteDraft) && Boolean(noteDraft.content.trim())} onCancel={() => setModal("application")} />
         </form>
       </Modal>}
 
@@ -1089,7 +1139,7 @@ function CareerLibraryView({ data, busy, onSaveProfile, onGenerateProfile, onAdd
   return <div className="page-stack compact-page-stack">
     <details className="panel profile-panel career-profile-details">
       <summary className="career-profile-summary-head"><div><h2>Career Profile Summary</h2><span>{summary.trim() ? `${countWords(summary)} words · click to view or edit` : "Not created · click to open"}</span></div></summary>
-      <div className="career-profile-body"><div className="button-row profile-actions">{data.settings.aiEnabled && <button className="secondary-button compact-button" disabled={busy} onClick={onGenerateProfile}><Icon name="spark" width="15" />Generate / refine from library</button>}</div><textarea rows={7} value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="Summarize your career experience, strengths, industries, and role positioning." /><div className="align-right"><button className="primary-button compact-button" onClick={() => onSaveProfile(summary)}>Save summary</button></div></div>
+      <div className="career-profile-body"><div className="button-row profile-actions">{data.settings.aiEnabled && <button className="secondary-button compact-button" disabled={busy} onClick={onGenerateProfile}><Icon name="spark" width="15" />Generate / refine from library</button>}</div><textarea rows={7} value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="Summarize your career experience, strengths, industries, and role positioning." /><div className="align-right"><button className="primary-button compact-button" disabled={busy || summary === data.settings.careerProfileSummary} onClick={() => onSaveProfile(summary)}>Save summary</button></div></div>
     </details>
     <section className="panel dense-panel"><div className="panel-heading compact-heading"><div><h2>Career entries</h2></div><button className="primary-button compact-button" onClick={onAdd}><Icon name="plus" width="15" />Add entry</button></div>
       <div className="career-filter-bar"><div className="search-box"><Icon name="search" width="15" /><input placeholder="Search title, organization, skills or technology" value={query} onChange={(event) => setQuery(event.target.value)} /></div><label className="compact-filter"><span>Category</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="all">All categories</option><option value="career_work">Career work</option><option value="project">Project</option><option value="achievement">Achievement</option><option value="skill">Skill</option><option value="certification">Certification</option><option value="career_story">Career story</option></select></label><span className="list-count">{entries.length} entries</span></div>
@@ -1111,9 +1161,10 @@ function SettingsView({ data, onReload, setNotice, setError, onDirtyChange }: { 
   const [selectedS3Backup, setSelectedS3Backup] = useState("");
   const [newWorkArrangementName, setNewWorkArrangementName] = useState("");
   const [settingsTab, setSettingsTab] = useState<"general" | "ai">("general");
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(data.settings);
 
   useEffect(() => { setDraft(data.settings); onDirtyChange(false); }, [data.settings, onDirtyChange]);
-  useEffect(() => { onDirtyChange(JSON.stringify(draft) !== JSON.stringify(data.settings)); }, [draft, data.settings, onDirtyChange]);
+  useEffect(() => { onDirtyChange(isDirty); }, [isDirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
   useEffect(() => {
     if (draft.aiProvider) hasSecret(`${draft.aiProvider}_api_key`).then(setAiKeyStored).catch(() => setAiKeyStored(false));
@@ -1326,9 +1377,9 @@ function SettingsView({ data, onReload, setNotice, setError, onDirtyChange }: { 
       <section className="panel settings-compact-panel"><div className="panel-heading"><div><h2>Work arrangements</h2></div></div><div className="work-arrangement-list">{data.workArrangements.map((item) => <div key={item.id}><span>{item.name}</span><button type="button" className="icon-button danger compact-icon" aria-label={`Delete ${item.name}`} onClick={() => deleteWorkArrangement(item.id)}><Icon name="trash" width="13" /></button></div>)}</div><div className="compact-add-row"><input value={newWorkArrangementName} onChange={(event) => setNewWorkArrangementName(event.target.value)} placeholder="Add arrangement" /><button type="button" className="secondary-button compact-button" onClick={addWorkArrangement}>Add</button></div></section>
 
       <div className="settings-pair full-span">
-        <section className="panel settings-connection-panel"><div className="panel-heading"><div><h2>AI</h2></div><span className={`connection-state ${aiKeyStored ? "ready" : ""}`}>{aiKeyStored ? "Key stored" : "No key"}</span></div><div className="settings-form two-column"><label className="toggle-row full"><div><strong>Enable AI actions</strong></div><input type="checkbox" checked={draft.aiEnabled} onChange={(event) => setDraft({ ...draft, aiEnabled: event.target.checked })} /></label><Field label="Provider"><select value={draft.aiProvider} onChange={(event) => setDraft({ ...draft, aiProvider: event.target.value as AiProvider })}><option value="">Not selected</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic Claude</option><option value="gemini">Google Gemini</option></select></Field><Field label="Model"><input value={draft.aiModel} onChange={(event) => setDraft({ ...draft, aiModel: event.target.value })} /></Field>{draft.aiProvider && <><Field label="API key" full><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={aiKeyStored ? "Stored" : "Paste API key"} /></Field><div className="button-row full"><button className="secondary-button compact-button" onClick={saveAiCredential}>Save key</button><button className="secondary-button compact-button" disabled={!aiKeyStored || !draft.aiModel} onClick={() => safe(async () => { const base: AiUsageRecord = { id: crypto.randomUUID(), provider: draft.aiProvider, model: draft.aiModel, operation: "connection_test", createdAt: new Date().toISOString(), inputTokens: 0, outputTokens: 0, totalTokens: 0, status: "success", errorMessage: "" }; try { const result = await testAi(draft.aiProvider, draft.aiModel); await repository.saveAiUsage({ ...base, inputTokens: result.inputTokens, outputTokens: result.outputTokens, totalTokens: result.totalTokens }); await onReload(); setNotice(`AI connection: ${result.text}`); } catch (reason) { const message = reason instanceof Error ? reason.message : String(reason); await repository.saveAiUsage({ ...base, status: "failed", errorMessage: message.slice(0, 500) }).catch(() => undefined); await onReload(); throw reason; } })}>Test</button>{aiKeyStored && <button className="text-button danger-text" onClick={removeAiCredential}>Remove</button>}</div></>}</div></section>
+        <section className="panel settings-connection-panel"><div className="panel-heading"><div><h2>AI</h2></div><span className={`connection-state ${aiKeyStored ? "ready" : ""}`}>{aiKeyStored ? "Key stored" : "No key"}</span></div><div className="settings-form two-column"><label className="toggle-row full"><div><strong>Enable AI actions</strong></div><input type="checkbox" checked={draft.aiEnabled} onChange={(event) => setDraft({ ...draft, aiEnabled: event.target.checked })} /></label><Field label="Provider"><select value={draft.aiProvider} onChange={(event) => setDraft({ ...draft, aiProvider: event.target.value as AiProvider })}><option value="">Not selected</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic Claude</option><option value="gemini">Google Gemini</option></select></Field><Field label="Model"><input value={draft.aiModel} onChange={(event) => setDraft({ ...draft, aiModel: event.target.value })} /></Field>{draft.aiProvider && <><Field label="API key" full><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={aiKeyStored ? "Stored" : "Paste API key"} /></Field><div className="button-row full"><button className="secondary-button compact-button" disabled={working || !apiKey.trim()} onClick={saveAiCredential}>Save key</button><button className="secondary-button compact-button" disabled={!aiKeyStored || !draft.aiModel} onClick={() => safe(async () => { const base: AiUsageRecord = { id: crypto.randomUUID(), provider: draft.aiProvider, model: draft.aiModel, operation: "connection_test", createdAt: new Date().toISOString(), inputTokens: 0, outputTokens: 0, totalTokens: 0, status: "success", errorMessage: "" }; try { const result = await testAi(draft.aiProvider, draft.aiModel); await repository.saveAiUsage({ ...base, inputTokens: result.inputTokens, outputTokens: result.outputTokens, totalTokens: result.totalTokens }); await onReload(); setNotice(`AI connection: ${result.text}`); } catch (reason) { const message = reason instanceof Error ? reason.message : String(reason); await repository.saveAiUsage({ ...base, status: "failed", errorMessage: message.slice(0, 500) }).catch(() => undefined); await onReload(); throw reason; } })}>Test</button>{aiKeyStored && <button className="text-button danger-text" onClick={removeAiCredential}>Remove</button>}</div></>}</div></section>
 
-        <section className="panel settings-connection-panel"><div className="panel-heading"><div><h2>S3</h2></div><span className={`connection-state ${s3KeysStored ? "ready" : ""}`}>{s3KeysStored ? "Credentials stored" : "No credentials"}</span></div><div className="settings-form two-column"><Field label="Bucket"><input value={draft.s3Bucket} onChange={(event) => setDraft({ ...draft, s3Bucket: event.target.value })} /></Field><Field label="Region"><input value={draft.s3Region} onChange={(event) => setDraft({ ...draft, s3Region: event.target.value })} placeholder="auto" /></Field><Field label="Prefix"><input value={draft.s3Prefix} onChange={(event) => setDraft({ ...draft, s3Prefix: event.target.value })} /></Field><Field label="Endpoint"><input value={draft.s3Endpoint} onChange={(event) => setDraft({ ...draft, s3Endpoint: event.target.value })} placeholder="https://ACCOUNT_ID.r2.cloudflarestorage.com" /></Field><Field label="Access key"><input type="password" value={s3Access} onChange={(event) => setS3Access(event.target.value)} placeholder={s3KeysStored ? "Stored" : "Access key"} /></Field><Field label="Secret key"><input type="password" value={s3Secret} onChange={(event) => setS3Secret(event.target.value)} placeholder={s3KeysStored ? "Stored" : "Secret key"} /></Field><div className="button-row full"><button className="secondary-button compact-button" onClick={saveS3Credentials}>Save credentials</button><button className="secondary-button compact-button" disabled={!s3KeysStored} onClick={() => safe(async () => { const result = await testS3(draft); setNotice(`S3 connection: ${result}`); })}>Test</button></div></div></section>
+        <section className="panel settings-connection-panel"><div className="panel-heading"><div><h2>S3</h2></div><span className={`connection-state ${s3KeysStored ? "ready" : ""}`}>{s3KeysStored ? "Credentials stored" : "No credentials"}</span></div><div className="settings-form two-column"><Field label="Bucket"><input value={draft.s3Bucket} onChange={(event) => setDraft({ ...draft, s3Bucket: event.target.value })} /></Field><Field label="Region"><input value={draft.s3Region} onChange={(event) => setDraft({ ...draft, s3Region: event.target.value })} placeholder="auto" /></Field><Field label="Prefix"><input value={draft.s3Prefix} onChange={(event) => setDraft({ ...draft, s3Prefix: event.target.value })} /></Field><Field label="Endpoint"><input value={draft.s3Endpoint} onChange={(event) => setDraft({ ...draft, s3Endpoint: event.target.value })} placeholder="https://ACCOUNT_ID.r2.cloudflarestorage.com" /></Field><Field label="Access key"><input type="password" value={s3Access} onChange={(event) => setS3Access(event.target.value)} placeholder={s3KeysStored ? "Stored" : "Access key"} /></Field><Field label="Secret key"><input type="password" value={s3Secret} onChange={(event) => setS3Secret(event.target.value)} placeholder={s3KeysStored ? "Stored" : "Secret key"} /></Field><div className="button-row full"><button className="secondary-button compact-button" disabled={working || !s3Access.trim() || !s3Secret.trim()} onClick={saveS3Credentials}>Save credentials</button><button className="secondary-button compact-button" disabled={!s3KeysStored} onClick={() => safe(async () => { const result = await testS3(draft); setNotice(`S3 connection: ${result}`); })}>Test</button></div></div></section>
       </div>
 
       <section className="panel full-span settings-compact-panel"><div className="panel-heading"><div><h2>AI output limits</h2></div></div><div className="limit-grid"><Field label="Company description words"><input type="number" min="10" max="500" value={draft.companyDescriptionMaxWords} onChange={(event) => setDraft({ ...draft, companyDescriptionMaxWords: Number(event.target.value) })} /></Field><Field label="Products/services words"><input type="number" min="5" max="500" value={draft.companyProductsMaxWords} onChange={(event) => setDraft({ ...draft, companyProductsMaxWords: Number(event.target.value) })} /></Field><Field label="Industry words"><input type="number" min="1" max="50" value={draft.companyIndustryMaxWords} onChange={(event) => setDraft({ ...draft, companyIndustryMaxWords: Number(event.target.value) })} /></Field><Field label="Headquarters words"><input type="number" min="1" max="50" value={draft.companyHeadquartersMaxWords} onChange={(event) => setDraft({ ...draft, companyHeadquartersMaxWords: Number(event.target.value) })} /></Field><Field label="Resume max growth %"><input type="number" min="0" max="100" step="1" value={draft.resumeMaxGrowthPercent} onChange={(event) => setDraft({ ...draft, resumeMaxGrowthPercent: Number(event.target.value) })} /></Field><Field label="Cover letter max words"><input type="number" min="50" max="1000" value={draft.coverLetterMaxWords} onChange={(event) => setDraft({ ...draft, coverLetterMaxWords: Number(event.target.value) })} /></Field></div></section>
@@ -1348,7 +1399,7 @@ function SettingsView({ data, onReload, setNotice, setError, onDirtyChange }: { 
       <AiUsagePanel data={data} onClear={async () => { if (!window.confirm("Clear cumulative AI usage and recent calls?")) return; await repository.clearAiUsage(); await onReload(); setNotice("AI usage cleared."); }} />
     </div>}
 
-    <div className="settings-save"><span /><button className="primary-button" disabled={working} onClick={saveSettings}>Save settings</button></div>
+    <div className="settings-save"><span /><button className="primary-button" disabled={working || !isDirty} onClick={saveSettings}>Save settings</button></div>
   </div>;
 
 }
@@ -1437,6 +1488,6 @@ function Field({ label, children, full = false, required = false, hint }: { labe
   return <label className={`field ${full ? "full" : ""}`}><span>{label}{required && <em>*</em>}</span>{children}{hint && <small>{hint}</small>}</label>;
 }
 
-function FormActions({ onCancel, extra }: { onCancel: () => void; extra?: ReactNode }) {
-  return <div className="form-actions full">{extra}<span /><button type="button" className="secondary-button" onClick={onCancel}>Cancel</button><button type="submit" className="primary-button">Save</button></div>;
+function FormActions({ onCancel, extra, saveEnabled = true }: { onCancel: () => void; extra?: ReactNode; saveEnabled?: boolean }) {
+  return <div className="form-actions full">{extra}<span /><button type="button" className="secondary-button" onClick={onCancel}>Cancel</button><button type="submit" className="primary-button" disabled={!saveEnabled}>Save</button></div>;
 }

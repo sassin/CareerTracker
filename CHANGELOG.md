@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.2.12
 
+- Make every Save action state-aware: disabled and visually neutral when nothing changed, primary only when there are unsaved edits, and inactive again after persistence.
 - Keep cumulative AI call and token totals until the user explicitly clears usage.
 - Retain only the 10 most recent AI call details to prevent unbounded telemetry growth.
 - Rename the AI usage reset action to **Clear usage** and reset both cumulative totals and recent activity together.

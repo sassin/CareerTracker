@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Keep cumulative AI call and token totals until the user explicitly clears usage.
+- Retain only the 10 most recent AI call details to prevent unbounded telemetry growth.
+- Rename the AI usage reset action to **Clear usage** and reset both cumulative totals and recent activity together.
+- Migrate existing AI usage into cumulative totals while preserving only the newest 10 detailed calls.
+
 ## 1.2.11
 
 - Compact Questions repository with search and a single Scope filter for Common Qs or a company.

@@ -185,6 +185,13 @@ export interface AiUsageRecord {
   errorMessage: string;
 }
 
+export interface AiUsageTotals {
+  totalCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
 export interface AppData {
   companies: Company[];
   applications: JobApplication[];
@@ -197,6 +204,7 @@ export interface AppData {
   careerEntries: CareerEntry[];
   workArrangements: WorkArrangement[];
   aiUsage: AiUsageRecord[];
+  aiUsageTotals: AiUsageTotals;
   settings: AppSettings;
 }
 
@@ -263,6 +271,7 @@ export const emptyData: AppData = {
   notes: [],
   careerEntries: [],
   aiUsage: [],
+  aiUsageTotals: { totalCalls: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 },
   workArrangements: [
     { id: "remote", name: "Remote", sortOrder: 10 },
     { id: "on-site", name: "On-Site", sortOrder: 20 },

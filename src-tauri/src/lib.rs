@@ -1272,6 +1272,7 @@ pub fn run() {
         Migration { version: 5, description: "default_s3_region_to_auto", sql: include_str!("../migrations/0005_default_s3_region.sql"), kind: MigrationKind::Up },
         Migration { version: 6, description: "add_role_ai_prompt_and_work_arrangements", sql: include_str!("../migrations/0006_role_ai_and_work_arrangements.sql"), kind: MigrationKind::Up },
         Migration { version: 7, description: "add_ai_usage_and_document_dates", sql: include_str!("../migrations/0007_ai_usage_and_document_dates.sql"), kind: MigrationKind::Up },
+        Migration { version: 8, description: "compact_ai_usage", sql: include_str!("../migrations/0008_compact_ai_usage.sql"), kind: MigrationKind::Up },
     ];
 
     tauri::Builder::default()

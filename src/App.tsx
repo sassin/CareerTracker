@@ -291,13 +291,33 @@ export default function App() {
       const result = await aiComplete(provider, model, prompt);
       const record = { ...base, inputTokens: result.inputTokens, outputTokens: result.outputTokens, totalTokens: result.totalTokens };
       await repository.saveAiUsage(record);
-      setData((current) => ({ ...current, aiUsage: [record, ...current.aiUsage].slice(0, 5000) }));
+      setData((current) => ({
+        ...current,
+        aiUsage: [record, ...current.aiUsage].slice(0, 10),
+        aiUsageTotals: {
+          totalCalls: current.aiUsageTotals.totalCalls + 1,
+          inputTokens: current.aiUsageTotals.inputTokens + record.inputTokens,
+          outputTokens: current.aiUsageTotals.outputTokens + record.outputTokens,
+          totalTokens: current.aiUsageTotals.totalTokens + record.totalTokens,
+        },
+      }));
       return result.text;
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : String(reason);
       const record = { ...base, status: "failed" as const, errorMessage: message.slice(0, 500) };
-      await repository.saveAiUsage(record).catch(() => undefined);
-      setData((current) => ({ ...current, aiUsage: [record, ...current.aiUsage].slice(0, 5000) }));
+      const stored = await repository.saveAiUsage(record).then(() => true).catch(() => false);
+      if (stored) {
+        setData((current) => ({
+          ...current,
+          aiUsage: [record, ...current.aiUsage].slice(0, 10),
+          aiUsageTotals: {
+            totalCalls: current.aiUsageTotals.totalCalls + 1,
+            inputTokens: current.aiUsageTotals.inputTokens + record.inputTokens,
+            outputTokens: current.aiUsageTotals.outputTokens + record.outputTokens,
+            totalTokens: current.aiUsageTotals.totalTokens + record.totalTokens,
+          },
+        }));
+      }
       throw reason;
     }
   }
@@ -1325,7 +1345,7 @@ function SettingsView({ data, onReload, setNotice, setError, onDirtyChange }: { 
         <PromptEditor title="Resume review" description="Evaluates resume fit against a role and recommends changes only when there is a material gap." value={draft.resumeReviewSystemPrompt} rows={9} onChange={(value) => setDraft({ ...draft, resumeReviewSystemPrompt: value })} onRestore={() => setDraft({ ...draft, resumeReviewSystemPrompt: DEFAULT_RESUME_REVIEW_PROMPT })} />
         <PromptEditor title="Cover letter" description="Generates a concise role-specific cover letter from verified career evidence and application context." value={draft.coverLetterSystemPrompt} rows={9} onChange={(value) => setDraft({ ...draft, coverLetterSystemPrompt: value })} onRestore={() => setDraft({ ...draft, coverLetterSystemPrompt: DEFAULT_COVER_LETTER_PROMPT })} />
       </section>
-      <AiUsagePanel data={data} onClear={async () => { if (!window.confirm("Clear AI usage history?")) return; await repository.clearAiUsage(); await onReload(); setNotice("AI usage history cleared."); }} />
+      <AiUsagePanel data={data} onClear={async () => { if (!window.confirm("Clear cumulative AI usage and recent calls?")) return; await repository.clearAiUsage(); await onReload(); setNotice("AI usage cleared."); }} />
     </div>}
 
     <div className="settings-save"><span /><button className="primary-button" disabled={working} onClick={saveSettings}>Save settings</button></div>
@@ -1343,17 +1363,15 @@ function PromptEditor({ title, description, value, rows, onChange, onRestore }: 
 }
 
 function AiUsagePanel({ data, onClear }: { data: AppData; onClear: () => void }) {
-  const [range, setRange] = useState<"all" | "7" | "30" | "90">("30");
-  const cutoff = range === "all" ? 0 : Date.now() - Number(range) * 24 * 60 * 60 * 1000;
-  const rows = data.aiUsage.filter((item) => !cutoff || new Date(item.createdAt).getTime() >= cutoff);
-  const inputTokens = rows.reduce((sum, item) => sum + item.inputTokens, 0);
-  const outputTokens = rows.reduce((sum, item) => sum + item.outputTokens, 0);
-  const totalTokens = rows.reduce((sum, item) => sum + item.totalTokens, 0);
-  const operationLabel = (value: string) => ({ company_details: "Company details", career_entry_summary: "Career entry summary", career_profile_summary: "Career profile summary", resume_review: "Resume review", cover_letter: "Cover letter", connection_test: "Connection test" } as Record<string,string>)[value] ?? value.replaceAll("_", " ");
+  const rows = data.aiUsage.slice(0, 10);
+  const totals = data.aiUsageTotals;
+  const operationLabel = (value: string) => ({ company_details: "Company details", career_entry_summary: "Career entry summary", career_entry_description: "Career entry description", career_profile_summary: "Career profile summary", resume_review: "Resume review", cover_letter: "Cover letter", connection_test: "Connection test" } as Record<string,string>)[value] ?? value.replaceAll("_", " ");
+  const hasUsage = totals.totalCalls > 0 || rows.length > 0;
   return <section className="panel full-span usage-panel">
-    <div className="panel-heading"><div><h2>AI usage</h2></div><div className="button-row"><select className="compact-select" value={range} onChange={(event) => setRange(event.target.value as typeof range)}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option></select>{data.aiUsage.length > 0 && <button className="text-button danger-text" onClick={onClear}>Clear history</button>}</div></div>
-    <div className="usage-summary"><div><span>Calls</span><strong>{rows.length}</strong></div><div><span>Input tokens</span><strong>{inputTokens.toLocaleString()}</strong></div><div><span>Output tokens</span><strong>{outputTokens.toLocaleString()}</strong></div><div><span>Total tokens</span><strong>{totalTokens.toLocaleString()}</strong></div></div>
-    {rows.length ? <div className="usage-table"><div className="usage-head"><span>Time</span><span>Action</span><span>Provider / Model</span><span>Input</span><span>Output</span><span>Total</span><span>Status</span></div>{rows.map((item) => <div className="usage-row" key={item.id}><span>{new Date(item.createdAt).toLocaleString()}</span><span>{operationLabel(item.operation)}</span><span className="truncate-cell">{item.provider} · {item.model}</span><span>{item.inputTokens.toLocaleString()}</span><span>{item.outputTokens.toLocaleString()}</span><span>{item.totalTokens.toLocaleString()}</span><span className={`usage-status ${item.status}`}>{item.status === "success" ? "Success" : "Failed"}</span></div>)}</div> : <div className="gentle-note">No AI calls recorded for this period.</div>}
+    <div className="panel-heading"><div><h2>AI usage</h2><p>Cumulative usage since the last clear. Only the 10 most recent calls are retained as detailed activity.</p></div>{hasUsage && <button className="text-button danger-text" onClick={onClear}>Clear usage</button>}</div>
+    <div className="usage-summary"><div><span>Calls</span><strong>{totals.totalCalls.toLocaleString()}</strong></div><div><span>Input tokens</span><strong>{totals.inputTokens.toLocaleString()}</strong></div><div><span>Output tokens</span><strong>{totals.outputTokens.toLocaleString()}</strong></div><div><span>Total tokens</span><strong>{totals.totalTokens.toLocaleString()}</strong></div></div>
+    <div className="panel-heading"><div><h3>Recent activity</h3></div><span className="muted">Latest {rows.length} of 10 retained calls</span></div>
+    {rows.length ? <div className="usage-table"><div className="usage-head"><span>Time</span><span>Action</span><span>Provider / Model</span><span>Input</span><span>Output</span><span>Total</span><span>Status</span></div>{rows.map((item) => <div className="usage-row" key={item.id}><span>{new Date(item.createdAt).toLocaleString()}</span><span>{operationLabel(item.operation)}</span><span className="truncate-cell">{item.provider} · {item.model}</span><span>{item.inputTokens.toLocaleString()}</span><span>{item.outputTokens.toLocaleString()}</span><span>{item.totalTokens.toLocaleString()}</span><span className={`usage-status ${item.status}`}>{item.status === "success" ? "Success" : "Failed"}</span></div>)}</div> : <div className="gentle-note">No recent AI calls.</div>}
   </section>;
 }
 

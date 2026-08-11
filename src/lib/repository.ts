@@ -3,6 +3,7 @@ import {
   AppData,
   AppSettings,
   AiUsageRecord,
+  AiUsageTotals,
   ApplicationNote,
   ApplicationQuestion,
   CareerEntry,
@@ -93,7 +94,18 @@ function settingMap(rows: Array<{ key: string; value: string }>): AppSettings {
   };
 }
 
+function usageTotalsFrom(records: AiUsageRecord[]): AiUsageTotals {
+  return records.reduce<AiUsageTotals>((totals, item) => ({
+    totalCalls: totals.totalCalls + 1,
+    inputTokens: totals.inputTokens + item.inputTokens,
+    outputTokens: totals.outputTokens + item.outputTokens,
+    totalTokens: totals.totalTokens + item.totalTokens,
+  }), { totalCalls: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 });
+}
+
 function normalizeData(value: Partial<AppData>): AppData {
+  const existingUsage = value.aiUsage ?? [];
+  const existingTotals = value.aiUsageTotals ?? usageTotalsFrom(existingUsage);
   return {
     ...structuredClone(emptyData),
     ...value,
@@ -114,7 +126,8 @@ function normalizeData(value: Partial<AppData>): AppData {
     notes: value.notes ?? [],
     careerEntries: (value.careerEntries ?? []).map((item) => ({ ...item, entrySummary: item.entrySummary ?? "" })),
     workArrangements: value.workArrangements?.length ? value.workArrangements : structuredClone(emptyData.workArrangements),
-    aiUsage: value.aiUsage ?? [],
+    aiUsage: existingUsage.slice(0, 10),
+    aiUsageTotals: existingTotals,
     settings: { ...emptySettings, ...(value.settings ?? {}) },
   };
 }
@@ -179,8 +192,22 @@ class BrowserRepository implements Repository {
   async saveNote(value: ApplicationNote) { this.upsert(this.data.notes, value); }
   async saveCareerEntry(value: CareerEntry) { this.upsert(this.data.careerEntries, value); }
   async saveWorkArrangement(value: WorkArrangement) { this.upsert(this.data.workArrangements, value); this.data.workArrangements.sort((a,b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)); this.persist(); }
-  async saveAiUsage(value: AiUsageRecord) { this.data.aiUsage.unshift(value); this.data.aiUsage = this.data.aiUsage.slice(0, 5000); this.persist(); }
-  async clearAiUsage() { this.data.aiUsage = []; this.persist(); }
+  async saveAiUsage(value: AiUsageRecord) {
+    this.data.aiUsage.unshift(value);
+    this.data.aiUsage = this.data.aiUsage.slice(0, 10);
+    this.data.aiUsageTotals = {
+      totalCalls: this.data.aiUsageTotals.totalCalls + 1,
+      inputTokens: this.data.aiUsageTotals.inputTokens + value.inputTokens,
+      outputTokens: this.data.aiUsageTotals.outputTokens + value.outputTokens,
+      totalTokens: this.data.aiUsageTotals.totalTokens + value.totalTokens,
+    };
+    this.persist();
+  }
+  async clearAiUsage() {
+    this.data.aiUsage = [];
+    this.data.aiUsageTotals = { totalCalls: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    this.persist();
+  }
   async saveSettings(value: AppSettings) { this.data.settings = value; this.persist(); }
 
   async rebaseDocumentPaths(oldRoot: string, newRoot: string) {
@@ -228,7 +255,7 @@ class TauriRepository implements Repository {
   private get database() { if (!this.db) throw new Error("Database is not initialized."); return this.db; }
 
   async load(): Promise<AppData> {
-    const [companies, applications, resumes, templates, letters, questions, applicationQuestions, notes, careerEntries, workArrangements, aiUsage, settings] = await Promise.all([
+    const [companies, applications, resumes, templates, letters, questions, applicationQuestions, notes, careerEntries, workArrangements, aiUsage, aiUsageTotals, settings] = await Promise.all([
       this.database.select<Record<string, unknown>[]>("SELECT * FROM companies ORDER BY name COLLATE NOCASE"),
       this.database.select<Record<string, unknown>[]>("SELECT * FROM applications ORDER BY CASE WHEN date_applied='' THEN 1 ELSE 0 END, date_applied DESC, role_title COLLATE NOCASE"),
       this.database.select<Record<string, unknown>[]>("SELECT * FROM resumes ORDER BY rowid DESC"),
@@ -239,7 +266,8 @@ class TauriRepository implements Repository {
       this.database.select<Record<string, unknown>[]>("SELECT * FROM application_notes ORDER BY rowid DESC"),
       this.database.select<Record<string, unknown>[]>("SELECT * FROM career_entries ORDER BY title COLLATE NOCASE"),
       this.database.select<Record<string, unknown>[]>("SELECT * FROM work_arrangements ORDER BY sort_order, name COLLATE NOCASE"),
-      this.database.select<Record<string, unknown>[]>("SELECT * FROM ai_usage ORDER BY created_at DESC, rowid DESC LIMIT 5000"),
+      this.database.select<Record<string, unknown>[]>("SELECT * FROM ai_usage ORDER BY created_at DESC, rowid DESC LIMIT 10"),
+      this.database.select<Record<string, unknown>[]>("SELECT total_calls,input_tokens,output_tokens,total_tokens FROM ai_usage_totals WHERE id=1"),
       this.database.select<Array<{ key: string; value: string }>>("SELECT key, value FROM settings"),
     ]);
 
@@ -274,6 +302,12 @@ class TauriRepository implements Repository {
       careerEntries: careerEntries.map((row) => ({ id: String(row.id ?? ""), category: String(row.category ?? "project") as CareerEntry["category"], title: String(row.title ?? ""), organization: String(row.organization ?? ""), entrySummary: String(row.short_description ?? ""), detailedDescription: String(row.detailed_description ?? ""), skills: String(row.skills ?? ""), technologies: String(row.technologies ?? ""), resultsMetrics: String(row.results_metrics ?? ""), notes: String(row.notes ?? "") })),
       workArrangements: workArrangements.map((row) => ({ id: String(row.id ?? ""), name: String(row.name ?? ""), sortOrder: Number(row.sort_order ?? 0) })),
       aiUsage: aiUsage.map((row) => ({ id: String(row.id ?? ""), provider: String(row.provider ?? ""), model: String(row.model ?? ""), operation: String(row.operation ?? ""), createdAt: String(row.created_at ?? ""), inputTokens: Number(row.input_tokens ?? 0), outputTokens: Number(row.output_tokens ?? 0), totalTokens: Number(row.total_tokens ?? 0), status: String(row.status ?? "success") === "failed" ? "failed" : "success", errorMessage: String(row.error_message ?? "") })),
+      aiUsageTotals: {
+        totalCalls: Number(aiUsageTotals[0]?.total_calls ?? 0),
+        inputTokens: Number(aiUsageTotals[0]?.input_tokens ?? 0),
+        outputTokens: Number(aiUsageTotals[0]?.output_tokens ?? 0),
+        totalTokens: Number(aiUsageTotals[0]?.total_tokens ?? 0),
+      },
       settings: settingMap(settings),
     };
   }
@@ -294,8 +328,13 @@ class TauriRepository implements Repository {
   async saveNote(v: ApplicationNote) { await this.database.execute(`INSERT INTO application_notes (id,application_id,note_type,title,content) VALUES ($1,$2,$3,$4,$5) ON CONFLICT(id) DO UPDATE SET application_id=$2,note_type=$3,title=$4,content=$5`, [v.id,v.applicationId,v.noteType,v.title,v.content]); }
   async saveWorkArrangement(v: WorkArrangement) { await this.database.execute(`INSERT INTO work_arrangements (id,name,sort_order) VALUES ($1,$2,$3) ON CONFLICT(id) DO UPDATE SET name=$2,sort_order=$3`, [v.id,v.name,v.sortOrder]); }
   async saveCareerEntry(v: CareerEntry) { await this.database.execute(`INSERT INTO career_entries (id,category,title,organization,short_description,detailed_description,skills,technologies,results_metrics,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(id) DO UPDATE SET category=$2,title=$3,organization=$4,short_description=$5,detailed_description=$6,skills=$7,technologies=$8,results_metrics=$9,notes=$10`, [v.id,v.category,v.title,v.organization,v.entrySummary,v.detailedDescription,v.skills,v.technologies,v.resultsMetrics,v.notes]); }
-  async saveAiUsage(v: AiUsageRecord) { await this.database.execute(`INSERT INTO ai_usage (id,provider,model,operation,created_at,input_tokens,output_tokens,total_tokens,status,error_message) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [v.id,v.provider,v.model,v.operation,v.createdAt,v.inputTokens,v.outputTokens,v.totalTokens,v.status,v.errorMessage]); }
-  async clearAiUsage() { await this.database.execute("DELETE FROM ai_usage"); }
+  async saveAiUsage(v: AiUsageRecord) {
+    await this.database.execute(`INSERT INTO ai_usage (id,provider,model,operation,created_at,input_tokens,output_tokens,total_tokens,status,error_message) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [v.id,v.provider,v.model,v.operation,v.createdAt,v.inputTokens,v.outputTokens,v.totalTokens,v.status,v.errorMessage]);
+  }
+  async clearAiUsage() {
+    await this.database.execute("DELETE FROM ai_usage");
+    await this.database.execute("DELETE FROM ai_usage_totals");
+  }
 
   async saveSettings(v: AppSettings) {
     const rows: Array<[string,string]> = [["current_resume_id",v.currentResumeId],["cover_letter_template_id",v.coverLetterTemplateId],["career_profile_summary",v.careerProfileSummary],["storage_provider",v.storageMode],["workspace_path",v.workspacePath],["ai_enabled",String(v.aiEnabled)],["ai_provider",v.aiProvider],["ai_model",v.aiModel],["tectonic_path",v.tectonicPath],["s3_bucket",v.s3Bucket],["s3_region",v.s3Region],["s3_prefix",v.s3Prefix],["s3_endpoint",v.s3Endpoint],["company_description_max_words",String(v.companyDescriptionMaxWords)],["company_products_max_words",String(v.companyProductsMaxWords)],["company_industry_max_words",String(v.companyIndustryMaxWords)],["company_headquarters_max_words",String(v.companyHeadquartersMaxWords)],["resume_max_growth_percent",String(v.resumeMaxGrowthPercent)],["cover_letter_max_words",String(v.coverLetterMaxWords)],["company_details_system_prompt",v.companyDetailsSystemPrompt],["career_entry_summary_system_prompt",v.careerEntrySummarySystemPrompt],["career_entry_description_system_prompt",v.careerEntryDescriptionSystemPrompt],["career_profile_system_prompt",v.careerProfileSystemPrompt],["resume_review_system_prompt",v.resumeReviewSystemPrompt],["cover_letter_system_prompt",v.coverLetterSystemPrompt]];

@@ -2,22 +2,24 @@
 
 ## Add a role
 
-Use **Add role** from Overview or Roles. All visible posting fields are optional. A role can be saved without selecting a company and completed later.
+Use **Add role** from Overview or Roles. Posting fields are optional, and a role can be saved before all information is available.
 
-For each role you can record:
+A new role defaults Date Applied to the local current date; it remains editable or can be cleared. Work Arrangement is selected from the database-configured list in Settings. Company selection is searchable: type part of a company name and choose a matching saved company.
+
+A role can contain:
 
 - company, title, job ID, URL, location, and work arrangement
 - date applied and status
-- complete job description
+- job description
 - selected resume and company-bound cover letter
-- submitted application questions and answers
+- exact submitted application questions and answers
 - HR, hiring-manager, referral, and general notes
 
-Deleting a role also deletes only its submitted questions and notes. Shared documents, the company, and Career Library entries remain.
+Deleting a role deletes its submitted questions and notes. If the role used a resume that is not Current Resume and no other role references that resume, CareerTracker also removes the orphaned resume record.
 
 ## Current Resume
 
-Use **Upload Current Resume** when your latest complete resume changes. The uploaded resume becomes Current Resume even when CareerTracker recognizes it as an existing document.
+Use **Upload Current Resume** whenever your latest complete resume changes. That action always sets the uploaded or deduplicated resume as Current Resume.
 
 Uploading or selecting a resume inside a role does not change Current Resume.
 
@@ -25,42 +27,77 @@ Supported imports:
 
 - PDF: readable text is extracted
 - TXT or Markdown: text is retained
-- TEX: LaTeX source is retained as text
+- LaTeX bundle: select the primary `.tex` file together with optional `.cls`, `.sty`, and `.bib` files; the primary `.tex` content is used for matching and duplicate detection
 
-CareerTracker hashes normalized document text to detect exact duplicates. Names and file-system timestamps are not part of the hash.
+CareerTracker hashes normalized document text for duplicate detection. Filenames and file-system timestamps are excluded from the fingerprint.
 
-## Cover letters
+Current Resume can be deleted when no role references it. If a role references it, remove or change those references first.
 
-Upload a sample under **Documents → Cover letter formats**. It is used as the writing and formatting reference for AI-assisted letters and LaTeX generation.
+## Role resume
 
-A finished cover letter belongs to one company and may be selected by multiple roles at that company. A role may also upload its own letter, which is added to that company’s letter list.
+A role can select an existing resume or upload another resume. The role stores only the relationship to that resume record.
+
+Opening a role does not trigger an S3 download. Use **View resume** explicitly when you want to open the associated resume. Remote text fetched during the session is held in memory until CareerTracker exits.
+
+## Cover letter format and cover letters
+
+Upload or paste a sample under **Documents → Cover letter formats**. Current Cover Letter Format can be deleted without deleting finished company cover letters.
+
+A finished cover letter belongs to one company and may be selected by multiple roles at that company. A role may also upload its own company-specific letter.
+
+Use **View cover letter** to open the selected letter explicitly.
 
 ## Career Library
 
-Maintain the editable **Career Profile Summary** at the top of Career Library. Add individual verified entries for work, projects, achievements, skills, certifications, and career stories.
+Maintain the editable **Career Profile Summary** at the top of Career Library. Add verified entries for work, projects, achievements, skills, certifications, and career stories.
 
-Each entry has a concise editable summary. With AI enabled, **Create summary** drafts it from the full entry. Review before saving.
+Career Profile Summary is collapsed by default. Career entries are shown in a compact searchable list with category filtering. Each entry can contain a concise editable summary and a collapsible detailed description. With AI configured, **Refine summary** and **Refine description** generate the field when empty or improve the existing text when populated, using only verified facts already present in the entry.
 
 ## Resume review
 
-Inside a role, select a resume and add the job description. Then choose **Review resume and prepare**.
+Inside a role, select a resume (or rely on Current Resume), add the job description, and choose **Check resume fit**.
 
-CareerTracker locally selects up to five relevant Career Library entries and sends:
+CareerTracker selects up to five high-relevance Career Library entries and supplies the configured AI provider with:
 
-- high-level company information
+- company information
 - role and job description
 - selected resume text
 - Career Profile Summary
 - selected Career Library evidence
 
-The result is an editable assessment and suggested resume text. If the role has no cover letter, the same request may also create one. Existing cover letters are not replaced.
+The result includes an assessment and evidence used. CareerTracker asks for a new resume only when there is a material representation gap; minor keyword, style, or wording differences should not create a new variation. The maximum resume growth percentage is configurable in Settings and defaults to 20%.
 
-Save suggested resume text as a separate resume record. It does not become Current Resume automatically.
+Use the separate **Create cover letter** action when needed. The cover-letter maximum is configurable in Settings and defaults to 350 words. The optional **Additional instruction** field on the role is sent to either AI action.
 
-## Manual use
+Generated cover letters can be exported directly to PDF from the cover-letter editor. The PDF uses a restrained business-letter layout with a candidate header, divider, recipient/Re line, body paragraphs, and sign-off. Resume PDF export is not exposed.
 
-AI is never required. Without AI, all companies, roles, resumes, cover letters, questions, answers, notes, statuses, and Career Library records remain fully editable. A basic local terminology check is shown when a role has both a job description and selected resume.
+Use **Settings → AI Prompts & Usage** to edit the task prompts used for Company Details, Career Entry Summary, Career Entry Description, Career Profile Summary, Resume Review, and Cover Letter. Each prompt can be restored to its default. Application-enforced schemas, no-fabrication rules, and output limits are not editable there.
 
-## Backup
+Saving suggested resume text creates a separate resume record. It does not become Current Resume automatically.
 
-Choose a workspace folder in Settings, then use **Export backup**. The JSON backup contains all SQLite-backed application data and document text. Generated files remain in the workspace and can be mirrored separately to S3-compatible storage.
+## Application data backup
+
+Open Settings and use **Create backup** or **Load backup**.
+
+The backup contains:
+
+- companies and company notes
+- role/application metadata
+- generic and company-specific question repository entries
+- exact application questions and submitted answers
+- application notes
+- lightweight resume and cover-letter references used to reconnect existing local documents when possible
+
+The backup deliberately excludes:
+
+- job descriptions
+- resume and cover-letter text or files
+- Career Library content
+- generated LaTeX/PDF files
+- attachments
+- credentials
+- AI review output
+
+A backup can be saved locally or to configured S3-compatible storage.
+
+Loading a backup merges it into the current database. Existing local application IDs always win. When an application ID already exists, the backup copy and its questions and notes are skipped entirely. New applications are imported with an empty job description.

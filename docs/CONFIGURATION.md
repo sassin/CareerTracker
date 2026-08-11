@@ -1,60 +1,58 @@
 # Configuration
 
-## Local workspace
+## Storage mode
 
-The workspace stores generated LaTeX, PDFs, and exported backups. The SQLite database is stored in CareerTracker’s application-data directory, not in the workspace.
+### Local only
 
-When changing the workspace, CareerTracker asks whether to copy existing generated files and backups. If accepted, stored generated-file paths are updated to the new location. If declined, existing paths remain unchanged and future files use the new workspace.
+Generated files use the selected local folder. SQLite remains in the application-data directory.
+
+### S3 only
+
+Use S3-compatible object storage for remote Current Resume / Cover Letter Format snapshots and S3 backups. SQLite remains local for fast application browsing and text access.
+
+### Local + S3
+
+Local data is preferred. S3 is a remote snapshot/fallback and optional backup destination.
+
+## Cloudflare R2
+
+Create the bucket only. Do not create folders manually.
+
+For a bucket named `career-tracker`:
+
+```text
+Bucket: career-tracker
+Region: auto
+Prefix: careertracker
+Endpoint: https://ACCOUNT_ID.r2.cloudflarestorage.com
+```
+
+Create an R2 API token scoped to the bucket with object read/write access. Enter its Access Key ID and Secret Access Key in CareerTracker.
+
+CareerTracker creates object keys such as:
+
+```text
+careertracker/state/current-resume.json
+careertracker/state/cover-letter-format.json
+careertracker/backups/careertracker-backup-YYYYMMDD-HHMMSS.json
+```
+
+S3 operations use one initial attempt plus at most two retries. Downloaded text objects are kept in memory for the current CareerTracker process.
 
 ## AI providers
 
-AI is optional. Select one provider, enter a model available to your account, save the API key, and test the connection.
+Configure one provider and model:
 
-Supported adapters:
+- OpenAI
+- Anthropic Claude
+- Google Gemini
 
-- OpenAI Responses API
-- Anthropic Messages API
-- Google Gemini generateContent API
+Keys are stored in the operating-system credential manager.
 
-Keys are stored through the operating-system credential manager. They are not included in backups.
+## Local folder
 
-Provider costs, limits, model availability, and data-retention rules are controlled by the provider. Review those terms before sending resume or career information.
+The local folder is used for generated LaTeX/PDF files when Local or Local + S3 mode is selected. Changing it can optionally copy existing generated files and update stored paths.
 
 ## Tectonic
 
-Tectonic is optional and is used only for LaTeX-to-PDF export.
-
-Set either:
-
-- `tectonic` when the executable is available on `PATH`, or
-- the full path to `tectonic.exe`.
-
-CareerTracker writes a `.tex` file into the workspace and invokes Tectonic directly. Compilation errors are returned in the application.
-
-## S3-compatible mirror
-
-Local storage remains primary. Configure:
-
-- bucket
-- region
-- prefix
-- optional custom endpoint
-- access key and secret key
-
-A custom endpoint supports services such as Cloudflare R2, Backblaze B2, and MinIO when they expose an S3-compatible API.
-
-The current mirror requires permission to inspect the bucket and upload objects under the configured prefix. For Amazon S3, use a dedicated identity with only the required bucket and object permissions. Do not use administrator credentials.
-
-S3 sync is explicit through **Sync workspace now**. It does not synchronize the active SQLite database or resolve edits from multiple computers.
-
-## Secrets excluded from backup
-
-The following are intentionally excluded:
-
-- OpenAI API key
-- Anthropic API key
-- Gemini API key
-- S3 access key
-- S3 secret key
-
-Re-enter them after moving to another computer.
+Tectonic is only needed for PDF compilation. It is not required for tracking, AI review, resume text, cover-letter text, or backups.

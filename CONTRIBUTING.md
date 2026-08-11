@@ -4,11 +4,14 @@ Keep changes focused on the individual job-application workflow.
 
 Before opening a pull request:
 
-1. Run `npm run typecheck`.
-2. Run `npm run build`.
-3. Run `npm run tauri:dev` and verify SQLite persistence.
-4. Test manual workflows with AI disabled.
-5. Confirm no credentials, personal resumes, database files, or generated documents are committed.
-6. Add a database migration instead of editing an already released migration.
+1. Run `npm install`.
+2. Run `npm run typecheck`.
+3. Run `npm run build`.
+4. Run `cargo check --manifest-path src-tauri\Cargo.toml`.
+5. Run `npm run tauri:dev` and verify SQLite persistence.
+6. Test manual workflows with AI disabled.
+7. Run `.\scripts\check-release.ps1` after removing local build output if preparing a source archive.
+8. Confirm no credentials, personal resumes, database files, application backups, or generated installers are committed.
+9. Add a new database migration instead of editing an already released migration.
 
-Avoid introducing autonomous agents, hosted-account requirements, telemetry, or unrelated career-management features.
+Do not introduce hosted-account requirements, telemetry, autonomous application submission, or unrelated career-management features.

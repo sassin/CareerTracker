@@ -14,7 +14,6 @@ Check-Command "node" "Install Node.js 20 or later."
 Check-Command "npm" "npm is included with Node.js."
 Check-Command "rustc" "Install Rust through rustup, then open a new PowerShell window."
 Check-Command "cargo" "Cargo is included with Rust."
-Check-Command "tectonic" "Optional: install Tectonic for PDF export, or configure its full path inside CareerTracker."
 
 Write-Host ""
-Write-Host "Also confirm Visual Studio Build Tools 2022 includes Desktop development with C++."
+Write-Host "Windows builds also require Visual Studio Build Tools 2022 with Desktop development with C++ and Microsoft Edge WebView2 Runtime."

@@ -1,203 +1,197 @@
 # CareerTracker
 
-CareerTracker is a local-first desktop application for tracking job applications, the resumes and cover letters used for each role, submitted application questions, role-aligned notes, and reusable career evidence.
+CareerTracker is a single-user desktop application for tracking companies, job roles, resumes, cover letters, application questions, notes, and reusable career evidence.
 
-The application works without AI and without cloud storage. AI providers and S3-compatible storage are optional.
+## What it tracks
 
-## Core behavior
+- companies and high-level company information
+- multiple roles per company
+- optional job ID, URL, location, work arrangement, date applied, status, and job description
+- Current Resume plus role-specific resume selection/upload
+- cover-letter format/sample and company-specific cover letters
+- generic and company-specific question repository
+- exact questions and answers submitted with an application
+- HR, hiring-manager, referral, and general notes
+- Collapsible Career Profile Summary and compact, searchable Career Library entries
 
-- A company can have multiple roles.
-- Role fields are optional so an incomplete posting can be saved and completed later.
-- Statuses are limited to Preparing, Applied, In Process, Success, and Learning Experience.
-- The Current Resume is the most recent resume uploaded through **Upload Current Resume**.
-- A role can use an existing resume or upload a separate resume without changing Current Resume.
-- Resume duplicate detection hashes normalized document text. File name, upload time, file metadata, and operating-system timestamps are not included.
-- PDF resumes and cover letters are stored as extracted text. TXT, Markdown, and LaTeX source are stored as text in their supplied format.
-- Cover letter samples define the preferred writing and formatting reference.
-- Company cover letters can be reused across roles at the same company.
-- Application questions store the exact question and exact submitted answer. Answers are not versioned.
-- Deleting a role removes its submitted questions and notes but does not remove shared resumes, cover letters, companies, or Career Library entries.
-- AI actions are explicit. They never replace a resume, cover letter, or application record without user review.
+Statuses are: **Preparing**, **Applied**, **In Process**, **Success**, and **Learning Experience**.
 
-## Technology
+## Optional integrations
 
-- Tauri 2 desktop shell
-- React and TypeScript interface
-- Rust local service layer
-- SQLite local database
-- Operating-system credential manager for API and storage credentials
-- Optional OpenAI, Anthropic Claude, or Google Gemini connection
-- Optional Amazon S3 or S3-compatible storage mirror
-- Optional Tectonic LaTeX compiler
+CareerTracker runs without external services. When configured, it supports:
 
-## Windows prerequisites
+- OpenAI
+- Anthropic Claude
+- Google Gemini
+- Amazon S3 and S3-compatible storage such as Cloudflare R2
+
+## Run from source on Windows
+
+### Prerequisites
+
+Install:
 
 1. Node.js 20 or later
-2. Rust installed through `rustup`
+2. Rust through `rustup`
 3. Visual Studio Build Tools 2022 with **Desktop development with C++**
 4. Microsoft Edge WebView2 Runtime
-5. Optional: Tectonic for LaTeX-to-PDF export
 
-Run the included check:
+Check the command-line prerequisites:
 
 ```powershell
 .\scripts\check-prerequisites.ps1
 ```
 
-## Run locally
+### Clone and run
 
 ```powershell
+git clone <repository-url>
+cd CareerTracker
 npm install
+npm run typecheck
 npm run tauri:dev
 ```
 
-The first Rust build downloads and compiles native dependencies.
+The first Rust build compiles the Tauri and native dependencies and can produce a long compile log. Subsequent builds reuse Cargo's build cache.
 
-## Build the Windows installer
+`npm run dev` runs only the browser frontend. Use `npm run tauri:dev` for the real desktop application with SQLite and native features.
+
+## Build your own Windows installer
 
 ```powershell
-npm install
 npm run tauri:build
 ```
 
-Installers are written under:
+Generated installers are placed under:
 
 ```text
 src-tauri\target\release\bundle\
 ```
 
-## First-use setup
+They are build artifacts and are not committed to the repository.
 
-1. Open **Settings**.
-2. Choose a local workspace folder.
-3. Upload a Current Resume from Overview or Documents.
-4. Add or upload a cover letter sample.
-5. Add Career Library entries and edit the Career Profile Summary.
-6. Add companies and roles.
-7. Configure AI or S3 only when needed.
+If the maintainer publishes GitHub Releases, users can download the generated Windows installer instead of building from source.
 
-## AI setup
+## Data storage
 
-CareerTracker supports OpenAI, Anthropic Claude, and Google Gemini through direct API calls from the Rust layer.
+SQLite stores the operational records in CareerTracker's application-data directory, including:
 
-In **Settings → AI assistance**:
+- companies
+- roles/applications
+- job descriptions
+- resume and cover-letter text
+- questions and submitted answers
+- notes
+- Career Library
+- non-secret settings
 
-1. Enable AI actions.
-2. Select the provider.
-3. Enter a model name available to your account.
-4. Enter the API key.
-5. Save the key and test the connection.
+Credentials are stored through the operating-system credential manager.
 
-Keys are stored in the operating system credential manager. They are not stored in SQLite, source files, environment files, or browser storage.
+### Document storage modes
 
-AI is used only when the user clicks an AI action. A role-level resume review sends:
+- **Local only**
+- **S3 only**
+- **Local + S3**
+
+Opening a role does not require an S3 read. CareerTracker uses local SQLite text for normal browsing and only reads configured S3 objects when an explicit remote object is needed. S3 reads are cached in memory for the process lifetime. Each S3 operation uses one initial attempt plus at most two retries.
+
+### Cloudflare R2 example
+
+Create the bucket only. Do not manually create folders.
+
+```text
+Storage mode: S3 only
+Bucket: career-tracker
+Region: auto
+Prefix: careertracker
+Endpoint: https://ACCOUNT_ID.r2.cloudflarestorage.com
+Access key: <R2 access key ID>
+Secret key: <R2 secret access key>
+```
+
+Use an R2 token restricted to the selected bucket with object read/write access.
+
+## Resumes
+
+**Upload Current Resume** sets the uploaded or deduplicated resume as Current Resume.
+
+A resume uploaded inside a role is associated only with that role unless selected elsewhere. Duplicate detection hashes normalized resume text, so filenames and file-system timestamps do not affect the fingerprint.
+
+Supported imports:
+
+- PDF with embedded text
+- TXT
+- Markdown
+- LaTeX text bundle (`.tex` with optional `.cls`, `.sty`, `.bib`)
+
+A Current Resume can be deleted when no role references it. Deleting a role removes its resume automatically only when the resume is not Current Resume and no other role references it.
+
+## Cover letters
+
+CareerTracker maintains a central cover-letter format/sample and company-scoped cover letters. A company cover letter can be reused across roles at that company. Current Cover Letter Format can be deleted without deleting completed company letters.
+
+## Career Library and resume review
+
+Career Library stores verified work, projects, achievements, skills, certifications, and career stories. It uses a compact searchable list with category filtering. The Career Profile Summary is collapsed by default; entry summaries and detailed descriptions are editable and can be generated/refined with AI from verified entry facts.
+
+With an AI provider configured, **Check resume fit** uses:
 
 - company information
 - job description
 - selected resume text
-- editable Career Profile Summary
-- up to five locally selected high-match Career Library entries
-- the cover letter sample when a new cover letter is requested
+- Career Profile Summary
+- up to five locally scored high-relevance Career Library entries
 
-## Resume and cover letter workflow
+It returns a conservative fit assessment and suggests a new resume only for material gaps. The resume growth allowance is configurable in Settings and defaults to 20%. **Create cover letter** is a separate action; its maximum length is also configurable in Settings and defaults to 350 words. One optional per-role instruction is shared by both AI actions. Company-detail limits are configurable as well.
 
-CareerTracker stores document content as text. LaTeX and PDF are optional exports.
+## Application-data backup
 
-1. Review or edit document text.
-2. Select **Create LaTeX** when AI is configured.
-3. Review the generated LaTeX.
-4. Select **Compile PDF**.
-5. CareerTracker runs Tectonic and stores the generated `.tex` and `.pdf` files in the workspace.
+Backups are created only when the user selects **Create backup**. The destination can be local or configured S3 storage.
 
-For a supplied `.tex` file, the imported LaTeX is retained as text and can be compiled directly.
+Backups include:
 
-## Tectonic
+- companies and company notes
+- role/application metadata
+- question repository entries
+- exact application questions and submitted answers
+- application notes
+- lightweight resume and cover-letter references
 
-Install Tectonic using its official Windows instructions, then either:
+Backups exclude:
 
-- add `tectonic.exe` to `PATH`, or
-- enter its full path under **Settings → Tectonic executable**.
+- job descriptions
+- resume and cover-letter text/files
+- Career Library content
+- generated files
+- credentials
+- AI review output
 
-CareerTracker invokes Tectonic directly and does not use a shell command.
+**Load backup** merges records into the current database. If an application ID already exists, the current application is kept and the backup copy, including its old questions and notes, is skipped. New applications are imported with an empty job description.
 
-## Storage
-
-SQLite is always local and remains the system of record.
-
-The selected workspace contains only generated files and backups:
+## Repository layout
 
 ```text
-CareerTrackerWorkspace/
-├── generated/
-│   ├── resumes/
-│   └── cover-letters/
-└── backups/
+src/                    React/TypeScript UI and application logic
+src-tauri/              Rust desktop layer, Tauri config, migrations, icons
+docs/                   User, configuration, development, and release docs
+scripts/                Windows prerequisite/release checks
+.github/workflows/       CI and optional Windows release automation
 ```
 
-S3 mode is a mirror, not a remote database. It uploads workspace files to Amazon S3, Cloudflare R2, Backblaze B2, MinIO, or another S3-compatible service. It does not provide simultaneous multi-device editing.
+For development details see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). For configuration see [docs/CONFIGURATION.md](docs/CONFIGURATION.md). For release steps see [docs/RELEASING.md](docs/RELEASING.md).
 
-## Backup and restore
+## Source-control policy
 
-Use **Settings → Export backup** to write a complete JSON backup of application data into the workspace. Use **Restore backup** to replace the local data with a selected CareerTracker backup.
+Do not commit:
 
-Create a backup before upgrading or changing database-related code.
+- `.exe`, `.msi`, or other generated installers
+- `node_modules`, `dist`, or `src-tauri/target`
+- SQLite databases
+- application backups
+- API keys or S3 credentials
+- personal resumes, cover letters, or application data
 
-## Updating an existing CareerTracker foundation folder
-
-1. Close CareerTracker.
-2. Back up the current data from the application when possible.
-3. Replace the project source with this repository.
-4. Preserve any uncommitted personal files outside the source tree.
-5. Run:
-
-```powershell
-npm install
-npm run tauri:dev
-```
-
-The included SQLite migrations add resume review, LaTeX, document hashes, Career Profile, and AI settings while retaining existing companies and roles. Migration 4 corrects cover-letter duplicate detection so it is scoped to each company.
-
-## Public repository setup
-
-Before the first commit:
-
-```powershell
-git init
-git add .
-git commit -m "Initial CareerTracker release"
-```
-
-After the first successful local build, commit the generated `package-lock.json` and `src-tauri/Cargo.lock` so public builds use resolved dependency versions.
-
-## Privacy and security
-
-- No hosted CareerTracker backend is used.
-- No analytics or telemetry are included.
-- AI requests occur only after an explicit user action.
-- Credentials use the operating system credential manager.
-- S3 credentials should be restricted to the selected bucket or prefix.
-- Generated LaTeX should be reviewed before compilation.
-- CareerTracker does not submit job applications or send messages.
-
-See [SECURITY.md](SECURITY.md) for reporting and operational guidance.
-
-## Additional documentation
-
-- [User guide](docs/USER_GUIDE.md)
-- [Configuration](docs/CONFIGURATION.md)
-- [Data model](docs/DATA_MODEL.md)
-- [AI and storage boundaries](docs/AI_AND_STORAGE.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
-
-## Development commands
-
-```powershell
-npm run dev          # Browser-only UI preview
-npm run typecheck    # TypeScript validation
-npm run build        # Production frontend build
-npm run tauri:dev    # Desktop development
-npm run tauri:build  # Windows installers
-```
+After the first successful local dependency install/build, commit `package-lock.json` and `src-tauri/Cargo.lock` for reproducible dependency resolution.
 
 ## License
 

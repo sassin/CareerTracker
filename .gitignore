@@ -1,13 +1,34 @@
+# Frontend
 node_modules/
 dist/
 .vite/
+
+# Rust / Tauri build output
 src-tauri/target/
 src-tauri/gen/
+target/
+
+# Local application data
 *.db
 *.db-shm
 *.db-wal
+backups/
+generated/
+
+# Installers / binaries
+*.exe
+*.msi
+*.msix
+*.appx
+*.pdb
+
+# Secrets
 .env
 .env.*
 !.env.example
+
+# Editors / operating systems
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db

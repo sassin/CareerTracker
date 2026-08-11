@@ -1,3 +1,5 @@
+import { DEFAULT_CAREER_ENTRY_DESCRIPTION_PROMPT, DEFAULT_CAREER_ENTRY_SUMMARY_PROMPT, DEFAULT_CAREER_PROFILE_PROMPT, DEFAULT_COMPANY_DETAILS_PROMPT, DEFAULT_COVER_LETTER_PROMPT, DEFAULT_RESUME_REVIEW_PROMPT } from "./promptDefaults";
+
 export type ApplicationStatus =
   | "preparing"
   | "applied"
@@ -16,7 +18,18 @@ export type CareerEntryCategory =
   | "certification"
   | "career_story";
 export type AiProvider = "openai" | "anthropic" | "gemini" | "";
-export type StorageProvider = "local" | "s3";
+export type StorageMode = "local" | "s3" | "hybrid";
+
+export interface DocumentSourceFile {
+  name: string;
+  content: string;
+}
+
+export interface WorkArrangement {
+  id: string;
+  name: string;
+  sortOrder: number;
+}
 
 export interface Company {
   id: string;
@@ -47,10 +60,12 @@ export interface JobApplication {
   suggestedResumeText: string;
   selectedEvidenceJson: string;
   generalNotes: string;
+  aiUserPrompt: string;
 }
 
 export interface Resume {
   id: string;
+  createdAt: string;
   name: string;
   sourceType: DocumentSourceType;
   editableText: string;
@@ -58,10 +73,12 @@ export interface Resume {
   latexText: string;
   pdfPath: string;
   notes: string;
+  sourceFiles: DocumentSourceFile[];
 }
 
 export interface CoverLetterTemplate {
   id: string;
+  createdAt: string;
   name: string;
   sourceType: DocumentSourceType;
   editableText: string;
@@ -69,10 +86,12 @@ export interface CoverLetterTemplate {
   latexText: string;
   pdfPath: string;
   notes: string;
+  sourceFiles: DocumentSourceFile[];
 }
 
 export interface CoverLetter {
   id: string;
+  createdAt: string;
   companyId: string;
   name: string;
   roleFamily: string;
@@ -82,6 +101,7 @@ export interface CoverLetter {
   latexText: string;
   pdfPath: string;
   notes: string;
+  sourceFiles: DocumentSourceFile[];
 }
 
 export interface Question {
@@ -127,7 +147,7 @@ export interface AppSettings {
   currentResumeId: string;
   coverLetterTemplateId: string;
   careerProfileSummary: string;
-  storageProvider: StorageProvider;
+  storageMode: StorageMode;
   workspacePath: string;
   aiEnabled: boolean;
   aiProvider: AiProvider;
@@ -137,6 +157,32 @@ export interface AppSettings {
   s3Region: string;
   s3Prefix: string;
   s3Endpoint: string;
+  companyDescriptionMaxWords: number;
+  companyProductsMaxWords: number;
+  companyIndustryMaxWords: number;
+  companyHeadquartersMaxWords: number;
+  resumeMaxGrowthPercent: number;
+  coverLetterMaxWords: number;
+  companyDetailsSystemPrompt: string;
+  careerEntrySummarySystemPrompt: string;
+  careerEntryDescriptionSystemPrompt: string;
+  careerProfileSystemPrompt: string;
+  resumeReviewSystemPrompt: string;
+  coverLetterSystemPrompt: string;
+}
+
+
+export interface AiUsageRecord {
+  id: string;
+  provider: string;
+  model: string;
+  operation: string;
+  createdAt: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  status: "success" | "failed";
+  errorMessage: string;
 }
 
 export interface AppData {
@@ -149,6 +195,8 @@ export interface AppData {
   applicationQuestions: ApplicationQuestion[];
   notes: ApplicationNote[];
   careerEntries: CareerEntry[];
+  workArrangements: WorkArrangement[];
+  aiUsage: AiUsageRecord[];
   settings: AppSettings;
 }
 
@@ -157,6 +205,7 @@ export interface ImportedTextDocument {
   sourceType: DocumentSourceType;
   text: string;
   contentHash: string;
+  sourceFiles: DocumentSourceFile[];
 }
 
 export interface EvidenceMatch {
@@ -179,16 +228,28 @@ export const emptySettings: AppSettings = {
   currentResumeId: "",
   coverLetterTemplateId: "",
   careerProfileSummary: "",
-  storageProvider: "local",
+  storageMode: "local",
   workspacePath: "",
   aiEnabled: false,
   aiProvider: "",
   aiModel: "",
   tectonicPath: "tectonic",
   s3Bucket: "",
-  s3Region: "us-east-1",
+  s3Region: "auto",
   s3Prefix: "careertracker",
   s3Endpoint: "",
+  companyDescriptionMaxWords: 70,
+  companyProductsMaxWords: 45,
+  companyIndustryMaxWords: 8,
+  companyHeadquartersMaxWords: 12,
+  resumeMaxGrowthPercent: 20,
+  coverLetterMaxWords: 350,
+  companyDetailsSystemPrompt: DEFAULT_COMPANY_DETAILS_PROMPT,
+  careerEntrySummarySystemPrompt: DEFAULT_CAREER_ENTRY_SUMMARY_PROMPT,
+  careerEntryDescriptionSystemPrompt: DEFAULT_CAREER_ENTRY_DESCRIPTION_PROMPT,
+  careerProfileSystemPrompt: DEFAULT_CAREER_PROFILE_PROMPT,
+  resumeReviewSystemPrompt: DEFAULT_RESUME_REVIEW_PROMPT,
+  coverLetterSystemPrompt: DEFAULT_COVER_LETTER_PROMPT,
 };
 
 export const emptyData: AppData = {
@@ -201,5 +262,12 @@ export const emptyData: AppData = {
   applicationQuestions: [],
   notes: [],
   careerEntries: [],
+  aiUsage: [],
+  workArrangements: [
+    { id: "remote", name: "Remote", sortOrder: 10 },
+    { id: "on-site", name: "On-Site", sortOrder: 20 },
+    { id: "off-shore", name: "Off-Shore", sortOrder: 30 },
+    { id: "hybrid", name: "Hybrid", sortOrder: 40 },
+  ],
   settings: emptySettings,
 };

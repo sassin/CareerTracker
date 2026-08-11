@@ -2,50 +2,40 @@
 
 ## Company
 
-Stores high-level editable company information. AI-assisted lookup is optional.
+High-level company information and notes. A company can have many roles.
 
-## Role
+## Application / role
 
-A role is stored internally as an application record. It contains optional posting details, status, job description, selected resume, selected cover letter, review output, and general notes.
+All user-facing role fields are optional. The record can contain title, company, job ID, URL, location, work arrangement, applied date, status, job description, selected resume, selected cover letter, notes, and one optional AI instruction shared by role-level AI actions. Work-arrangement choices are stored in a configurable lookup table; the selected label is retained on the role.
 
 ## Resume
 
-A resume is a central text record with:
-
-- name
-- source type
-- editable text
-- normalized content hash
-- optional LaTeX
-- optional generated PDF path
-- notes
-
-The Current Resume is a setting that points to one resume record.
+A central text record with source type and normalized-content hash. LaTeX resumes can retain a text bundle containing the primary `.tex` file plus `.cls`, `.sty`, and `.bib` support files. The fingerprint is based on the primary resume content, not filenames or support files. One resume may be referenced by multiple roles. Current Resume is a setting pointing to one resume ID.
 
 ## Cover letter format
 
-A central sample used as a writing and formatting reference.
+A central sample/format record used as a reference for future letters.
 
 ## Cover letter
 
-A company-bound text record that can be selected by multiple roles at the same company.
+A company-scoped text record. It may be reused across roles at the same company.
 
-## Question
+## Question repository
 
-A generic or company-specific reusable question. It may include a reusable answer.
+Questions are generic or company-specific. A reusable answer may be stored.
 
 ## Application question
 
-The exact question and exact answer submitted for one role. No answer versioning is used.
+Stores the exact question and exact submitted answer for one application. No answer versioning.
 
 ## Application note
 
-A role-aligned HR, hiring-manager, referral, or general note.
+General, HR/recruiter, hiring-manager, or referral note linked to one application.
 
-## Career entry
+## Career Library
 
-A verified career fact source: work, project, achievement, skill, certification, or career story. Each entry includes an editable summary used in local matching and AI requests.
+Projects, work, achievements, skills, certifications, and career stories. Each entry can have a concise editable summary.
 
-## Settings
+## Backup model
 
-Stores non-secret configuration. API keys and S3 credentials are stored separately in the operating system credential manager.
+The backup format is intentionally separate from `AppData`. It excludes job descriptions and document bodies. Restore is additive: existing application IDs are never overwritten.

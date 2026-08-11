@@ -21,6 +21,14 @@ export const newCompany = (): Company => ({
   notes: "",
 });
 
+function localToday(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export const newApplication = (companyId = ""): JobApplication => ({
   id: crypto.randomUUID(),
   companyId,
@@ -29,7 +37,7 @@ export const newApplication = (companyId = ""): JobApplication => ({
   jobUrl: "",
   location: "",
   workArrangement: "",
-  dateApplied: "",
+  dateApplied: localToday(),
   status: "preparing",
   jobDescription: "",
   resumeId: "",
@@ -39,10 +47,12 @@ export const newApplication = (companyId = ""): JobApplication => ({
   suggestedResumeText: "",
   selectedEvidenceJson: "[]",
   generalNotes: "",
+  aiUserPrompt: "",
 });
 
 export const newResume = (): Resume => ({
   id: crypto.randomUUID(),
+  createdAt: new Date().toISOString(),
   name: "",
   sourceType: "text",
   editableText: "",
@@ -50,10 +60,12 @@ export const newResume = (): Resume => ({
   latexText: "",
   pdfPath: "",
   notes: "",
+  sourceFiles: [],
 });
 
 export const newCoverLetterTemplate = (): CoverLetterTemplate => ({
   id: crypto.randomUUID(),
+  createdAt: new Date().toISOString(),
   name: "",
   sourceType: "text",
   editableText: "",
@@ -61,10 +73,12 @@ export const newCoverLetterTemplate = (): CoverLetterTemplate => ({
   latexText: "",
   pdfPath: "",
   notes: "",
+  sourceFiles: [],
 });
 
 export const newCoverLetter = (companyId = ""): CoverLetter => ({
   id: crypto.randomUUID(),
+  createdAt: new Date().toISOString(),
   companyId,
   name: "",
   roleFamily: "",
@@ -74,6 +88,7 @@ export const newCoverLetter = (companyId = ""): CoverLetter => ({
   latexText: "",
   pdfPath: "",
   notes: "",
+  sourceFiles: [],
 });
 
 export const newQuestion = (): Question => ({

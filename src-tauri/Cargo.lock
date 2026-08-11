@@ -1038,7 +1038,7 @@ dependencies = [
 
 [[package]]
 name = "careertracker"
-version = "1.0.0"
+version = "1.2.11"
 dependencies = [
  "aws-config",
  "aws-credential-types",
@@ -1056,7 +1056,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tauri-plugin-sql",
- "walkdir",
+ "tokio",
 ]
 
 [[package]]
@@ -3073,7 +3073,9 @@ version = "3.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eebcc3aff044e5944a8fbaf69eb277d11986064cba30c468730e8b9909fb551c"
 dependencies = [
+ "byteorder",
  "log",
+ "windows-sys 0.60.2",
  "zeroize",
 ]
 

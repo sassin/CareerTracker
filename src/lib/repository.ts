@@ -65,6 +65,14 @@ function settingMap(rows: Array<{ key: string; value: string }>): AppSettings {
     const parsed = Number(map.get(key));
     return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
   };
+  const stringArraySetting = (key: string) => {
+    try {
+      const parsed: unknown = JSON.parse(map.get(key) ?? "[]");
+      return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+    } catch {
+      return [];
+    }
+  };
   return {
     currentResumeId: map.get("current_resume_id") ?? "",
     coverLetterTemplateId: map.get("cover_letter_template_id") ?? "",
@@ -85,6 +93,7 @@ function settingMap(rows: Array<{ key: string; value: string }>): AppSettings {
     companyHeadquartersMaxWords: numberSetting("company_headquarters_max_words", emptySettings.companyHeadquartersMaxWords, 1, 50),
     resumeMaxGrowthPercent: numberSetting("resume_max_growth_percent", emptySettings.resumeMaxGrowthPercent, 0, 100),
     coverLetterMaxWords: numberSetting("cover_letter_max_words", emptySettings.coverLetterMaxWords, 50, 1000),
+    generatedCoverLetterIds: stringArraySetting("generated_cover_letter_ids"),
     companyDetailsSystemPrompt: map.get("company_details_system_prompt") ?? emptySettings.companyDetailsSystemPrompt,
     careerEntrySummarySystemPrompt: map.get("career_entry_summary_system_prompt") ?? emptySettings.careerEntrySummarySystemPrompt,
     careerEntryDescriptionSystemPrompt: map.get("career_entry_description_system_prompt") ?? emptySettings.careerEntryDescriptionSystemPrompt,
@@ -337,7 +346,7 @@ class TauriRepository implements Repository {
   }
 
   async saveSettings(v: AppSettings) {
-    const rows: Array<[string,string]> = [["current_resume_id",v.currentResumeId],["cover_letter_template_id",v.coverLetterTemplateId],["career_profile_summary",v.careerProfileSummary],["storage_provider",v.storageMode],["workspace_path",v.workspacePath],["ai_enabled",String(v.aiEnabled)],["ai_provider",v.aiProvider],["ai_model",v.aiModel],["tectonic_path",v.tectonicPath],["s3_bucket",v.s3Bucket],["s3_region",v.s3Region],["s3_prefix",v.s3Prefix],["s3_endpoint",v.s3Endpoint],["company_description_max_words",String(v.companyDescriptionMaxWords)],["company_products_max_words",String(v.companyProductsMaxWords)],["company_industry_max_words",String(v.companyIndustryMaxWords)],["company_headquarters_max_words",String(v.companyHeadquartersMaxWords)],["resume_max_growth_percent",String(v.resumeMaxGrowthPercent)],["cover_letter_max_words",String(v.coverLetterMaxWords)],["company_details_system_prompt",v.companyDetailsSystemPrompt],["career_entry_summary_system_prompt",v.careerEntrySummarySystemPrompt],["career_entry_description_system_prompt",v.careerEntryDescriptionSystemPrompt],["career_profile_system_prompt",v.careerProfileSystemPrompt],["resume_review_system_prompt",v.resumeReviewSystemPrompt],["cover_letter_system_prompt",v.coverLetterSystemPrompt]];
+    const rows: Array<[string,string]> = [["current_resume_id",v.currentResumeId],["cover_letter_template_id",v.coverLetterTemplateId],["career_profile_summary",v.careerProfileSummary],["storage_provider",v.storageMode],["workspace_path",v.workspacePath],["ai_enabled",String(v.aiEnabled)],["ai_provider",v.aiProvider],["ai_model",v.aiModel],["tectonic_path",v.tectonicPath],["s3_bucket",v.s3Bucket],["s3_region",v.s3Region],["s3_prefix",v.s3Prefix],["s3_endpoint",v.s3Endpoint],["company_description_max_words",String(v.companyDescriptionMaxWords)],["company_products_max_words",String(v.companyProductsMaxWords)],["company_industry_max_words",String(v.companyIndustryMaxWords)],["company_headquarters_max_words",String(v.companyHeadquartersMaxWords)],["resume_max_growth_percent",String(v.resumeMaxGrowthPercent)],["cover_letter_max_words",String(v.coverLetterMaxWords)],["generated_cover_letter_ids",JSON.stringify(v.generatedCoverLetterIds)],["company_details_system_prompt",v.companyDetailsSystemPrompt],["career_entry_summary_system_prompt",v.careerEntrySummarySystemPrompt],["career_entry_description_system_prompt",v.careerEntryDescriptionSystemPrompt],["career_profile_system_prompt",v.careerProfileSystemPrompt],["resume_review_system_prompt",v.resumeReviewSystemPrompt],["cover_letter_system_prompt",v.coverLetterSystemPrompt]];
     for (const [key,value] of rows) await this.database.execute("INSERT INTO settings (key,value) VALUES ($1,$2) ON CONFLICT(key) DO UPDATE SET value=$2", [key,value]);
   }
 

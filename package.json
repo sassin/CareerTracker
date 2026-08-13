@@ -1,11 +1,12 @@
 {
   "name": "careertracker",
   "private": true,
-  "version": "1.2.13",
+  "version": "1.2.14",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "typecheck": "tsc --noEmit",
+    "check:encoding": "node scripts/check-source-encoding.mjs",
+    "typecheck": "npm run check:encoding && tsc --noEmit",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",

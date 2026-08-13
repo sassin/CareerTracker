@@ -89,13 +89,12 @@ const repository = createRepository();
 const CURRENT_RESUME_S3_KEY = "state/current-resume.json";
 const COVER_LETTER_FORMAT_S3_KEY = "state/cover-letter-format.json";
 
-type View = "overview" | "applications" | "companies" | "documents" | "questions" | "library" | "settings";
+type View = "overview" | "documents" | "questions" | "library" | "settings";
 type ModalName = "company" | "application" | "resume" | "template" | "letter" | "question" | "career" | "applicationQuestion" | "note" | null;
 
 const navItems: Array<{ id: View; label: string; icon: string }> = [
   { id: "overview", label: "Overview", icon: "overview" },
-  { id: "applications", label: "Roles", icon: "applications" },
-  { id: "companies", label: "Companies", icon: "companies" },
+
   { id: "documents", label: "Documents", icon: "documents" },
   { id: "questions", label: "Questions", icon: "questions" },
   { id: "library", label: "Career Library", icon: "library" },
@@ -110,7 +109,7 @@ const statusMeta: Record<ApplicationStatus, { label: string; className: string }
   learning_experience: { label: "Learning Experience", className: "status-learning" },
 };
 
-const overviewStatuses: ApplicationStatus[] = ["preparing", "applied", "in_process", "learning_experience"];
+
 
 function companyName(data: AppData, companyId: string) {
   return data.companies.find((company) => company.id === companyId)?.name || "Company not selected";
@@ -167,6 +166,7 @@ export default function App() {
 
   const [companyDraft, setCompanyDraft] = useState<Company>(newCompany());
   const [applicationDraft, setApplicationDraft] = useState<JobApplication>(newApplication());
+  const [jobDescriptionOpen, setJobDescriptionOpen] = useState(true);
   const [resumeDraft, setResumeDraft] = useState<Resume>(newResume());
   const [templateDraft, setTemplateDraft] = useState<CoverLetterTemplate>(newCoverLetterTemplate());
   const [letterDraft, setLetterDraft] = useState<CoverLetter>(newCoverLetter());
@@ -373,6 +373,7 @@ export default function App() {
   function openApplication(application?: JobApplication, companyId = "") {
     const draft = application ? { ...application } : newApplication(companyId);
     setApplicationDraft(draft);
+    setJobDescriptionOpen(!application || !draft.jobDescription.trim());
     rememberDraftBaseline("application", draft);
     setModal("application");
   }
@@ -575,6 +576,12 @@ export default function App() {
       const deletingCurrentTemplate = entity === "coverLetterTemplate" && data.settings.coverLetterTemplateId === id;
       await repository.deleteEntity(entity, id);
 
+      if (entity === "coverLetter" && data.settings.generatedCoverLetterIds.includes(id)) {
+        await repository.saveSettings({
+          ...data.settings,
+          generatedCoverLetterIds: data.settings.generatedCoverLetterIds.filter((item) => item !== id),
+        });
+      }
       if (orphanCandidates.length) await cleanupOrphanResumes(orphanCandidates);
 
       if (deletingCurrentResume || deletingCurrentTemplate) {
@@ -799,6 +806,10 @@ export default function App() {
         await repository.saveCoverLetter(letter);
         id = letter.id;
       }
+      await repository.saveSettings({
+        ...data.settings,
+        generatedCoverLetterIds: Array.from(new Set([...data.settings.generatedCoverLetterIds, id!])),
+      });
       const next = { ...applicationDraft, resumeId: applicationDraft.resumeId || resume?.id || "", coverLetterId: id! };
       setApplicationDraft(next);
       await repository.saveApplication(next);
@@ -829,6 +840,20 @@ export default function App() {
     });
   }
 
+  async function exportApplicationCoverLetterPdf() {
+    await run(async () => {
+      const letter = data.coverLetters.find((item) => item.id === applicationDraft.coverLetterId);
+      if (!letter || !data.settings.generatedCoverLetterIds.includes(letter.id) || !letter.editableText.trim()) {
+        throw new Error("Create a cover letter before exporting PDF.");
+      }
+      const path = await chooseCoverLetterPdfSavePath(letter.name || "cover-letter");
+      if (!path) return;
+      await exportCoverLetterPdf(path, letter.editableText);
+      await repository.saveCoverLetter({ ...letter, pdfPath: path });
+      await reload();
+      setNotice("Cover letter PDF exported.");
+    });
+  }
   async function exportLetterPdf() {
     await run(async () => {
       if (!letterDraft.editableText.trim()) throw new Error("Cover letter text is required before PDF export.");
@@ -842,11 +867,17 @@ export default function App() {
 
   const filteredApplications = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return data.applications.filter((application) => !query || `${application.roleTitle} ${companyName(data, application.companyId)} ${application.jobId} ${application.status}`.toLowerCase().includes(query));
+    return data.applications.filter((application) => !query || `${application.roleTitle} ${companyName(data, application.companyId)} ${application.jobId} ${statusMeta[application.status].label}`.toLowerCase().includes(query));
   }, [data, search]);
 
   const current = currentResume(data);
   const template = currentTemplate(data);
+  const applicationCoverLetter = data.coverLetters.find((item) => item.id === applicationDraft.coverLetterId);
+  const canExportApplicationCoverLetter = Boolean(
+    applicationCoverLetter?.editableText.trim() &&
+    applicationCoverLetter &&
+    data.settings.generatedCoverLetterIds.includes(applicationCoverLetter.id)
+  );
   const aiReady = aiSettingsReady(data.settings);
 
   if (loading) return <div className="loading-screen">Opening CareerTracker…</div>;
@@ -880,9 +911,8 @@ export default function App() {
         {error && <div className="alert error"><Icon name="warning" width="18" /><span>{error}</span><button onClick={() => setError("")}><Icon name="close" width="15" /></button></div>}
         {notice && <div className="alert success"><Icon name="check" width="18" /><span>{notice}</span></div>}
 
-        {view === "overview" && <OverviewView data={data} onOpenRole={(item) => openApplication(item)} />}
-        {view === "applications" && <ApplicationsView data={data} applications={filteredApplications} search={search} setSearch={setSearch} onOpen={(item) => openApplication(item)} onDelete={(item) => deleteItem("application", item.id, "role")} />}
-        {view === "companies" && <CompaniesView data={data} onOpen={openCompany} onDelete={(item) => deleteItem("company", item.id, "company and its roles")} />}
+        {view === "overview" && <OverviewView data={data} applications={filteredApplications} search={search} setSearch={setSearch} onOpenRole={(item) => openApplication(item)} onDeleteRole={(item) => deleteItem("application", item.id, "role")} onOpenCompany={openCompany} onDeleteCompany={(item) => deleteItem("company", item.id, "company and its roles")} />}
+
         {view === "documents" && <DocumentsView data={data} onUploadCurrent={() => importResume(true)} onAddResume={() => openResume()} onEditResume={openResume} onDeleteResume={(item) => deleteItem("resume", item.id, "resume")} onUploadTemplate={importTemplate} onAddTemplate={() => openTemplate()} onEditTemplate={openTemplate} onDeleteTemplate={(item) => deleteItem("coverLetterTemplate", item.id, "cover letter format")} onSetTemplate={async (id) => { const selected = data.coverLetterTemplates.find((item) => item.id === id); const settings = { ...data.settings, coverLetterTemplateId: id }; await repository.saveSettings(settings); if (selected) { const cloudError = await saveRemoteSnapshot(COVER_LETTER_FORMAT_S3_KEY, selected, settings); if (cloudError) setError(`Cover letter format selected locally. Cloud snapshot failed: ${cloudError}`); } await reload(); }} onAddLetter={() => openLetter()} onEditLetter={openLetter} onDeleteLetter={(item) => deleteItem("coverLetter", item.id, "cover letter")} />}
         {view === "questions" && <QuestionsView data={data} onAdd={() => openQuestion()} onEdit={openQuestion} onDelete={(item) => deleteItem("question", item.id, "question")} />}
         {view === "library" && <CareerLibraryView data={data} busy={busy} onSaveProfile={async (summary) => { await repository.saveSettings({ ...data.settings, careerProfileSummary: summary }); await reload(); setNotice("Career profile saved."); }} onGenerateProfile={generateCareerProfile} onAdd={() => openCareerEntry()} onEdit={openCareerEntry} onDelete={(item) => deleteItem("careerEntry", item.id, "career entry")} />}
@@ -912,27 +942,26 @@ export default function App() {
           <Field label="Work arrangement"><select className="compact-select" value={applicationDraft.workArrangement} onChange={(event) => setApplicationDraft({ ...applicationDraft, workArrangement: event.target.value })}><option value="">Not selected</option>{applicationDraft.workArrangement && !data.workArrangements.some((item) => item.name === applicationDraft.workArrangement) && <option value={applicationDraft.workArrangement}>{applicationDraft.workArrangement}</option>}{data.workArrangements.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></Field>
           <Field label="Date applied"><input type="date" value={applicationDraft.dateApplied} onChange={(event) => setApplicationDraft({ ...applicationDraft, dateApplied: event.target.value })} /></Field>
           <Field label="Status"><select value={applicationDraft.status} onChange={(event) => setApplicationDraft({ ...applicationDraft, status: event.target.value as ApplicationStatus })}>{Object.entries(statusMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></Field>
-          <Field label="Job description" full><textarea rows={10} value={applicationDraft.jobDescription} onChange={(event) => setApplicationDraft({ ...applicationDraft, jobDescription: event.target.value })} /></Field>
-
+          <details className="full role-job-description" open={jobDescriptionOpen} onToggle={(event) => setJobDescriptionOpen(event.currentTarget.open)}>
+            <summary><div><strong>Job description</strong><span>{applicationDraft.jobDescription.trim() ? `${countWords(applicationDraft.jobDescription)} words` : "Empty"}</span></div></summary>
+            <div className="role-job-description-body"><textarea rows={10} value={applicationDraft.jobDescription} onChange={(event) => setApplicationDraft({ ...applicationDraft, jobDescription: event.target.value })} /></div>
+          </details>
+          <Field label="Additional AI instruction" full><textarea rows={2} value={applicationDraft.aiUserPrompt} onChange={(event) => setApplicationDraft({ ...applicationDraft, aiUserPrompt: event.target.value })} placeholder="Optional instruction used for both resume review and cover letter generation." /></Field>
           <section className="embedded-section full compact-role-section">
             <div className="section-heading"><div><h3>Resume</h3></div><div className="button-row"><button type="button" className="secondary-button compact-button" onClick={() => importResume(false, true)}><Icon name="upload" width="14" />Upload</button><button type="button" className="secondary-button compact-button" disabled={busy || !aiReady} title={aiReady ? "" : "Complete AI setup in Settings"} onClick={reviewResumeForRole}><Icon name="spark" width="14" />Check resume fit</button></div></div>
             <div className="compact-document-control"><select value={applicationDraft.resumeId} onChange={(event) => setApplicationDraft({ ...applicationDraft, resumeId: event.target.value })}><option value="">Use Current Resume</option>{data.resumes.map((resume) => <option key={resume.id} value={resume.id}>{resume.name}</option>)}</select>{(applicationDraft.resumeId || current) && <button type="button" className="text-button" onClick={() => { const selected = data.resumes.find((item) => item.id === applicationDraft.resumeId) ?? current; if (selected) openResume(selected, true); }}>View</button>}</div>
           </section>
-
-          <section className="embedded-section full compact-role-section">
-            <div className="section-heading"><div><h3>Cover letter</h3></div><div className="button-row"><button type="button" className="secondary-button compact-button" onClick={importApplicationCoverLetter}><Icon name="upload" width="14" />Upload</button><button type="button" className="secondary-button compact-button" disabled={busy || !aiReady} title={aiReady ? "" : "Complete AI setup in Settings"} onClick={createCoverLetterForApplication}><Icon name="spark" width="14" />Create cover letter</button></div></div>
-            <div className="compact-document-control"><select value={applicationDraft.coverLetterId} onChange={(event) => setApplicationDraft({ ...applicationDraft, coverLetterId: event.target.value })}><option value="">Not selected</option>{data.coverLetters.filter((letter) => letter.companyId === applicationDraft.companyId).map((letter) => <option key={letter.id} value={letter.id}>{letter.name}</option>)}</select>{applicationDraft.coverLetterId && <button type="button" className="text-button" onClick={() => { const selected = data.coverLetters.find((item) => item.id === applicationDraft.coverLetterId); if (selected) openLetter(selected, "", true); }}>View</button>}</div>
-          </section>
-
-          <section className="embedded-section full ai-workspace compact-role-section">
-            <div className="section-heading"><div><h3>AI instruction and review</h3></div></div>
-            <Field label="Additional instruction"><textarea rows={2} value={applicationDraft.aiUserPrompt} onChange={(event) => setApplicationDraft({ ...applicationDraft, aiUserPrompt: event.target.value })} placeholder="Optional instruction used for both resume review and cover letter generation." /></Field>
+          <section className="embedded-section full ai-workspace compact-role-section resume-assessment-section">
+            <div className="section-heading"><div><h3>Resume assessment</h3></div></div>
             {applicationDraft.jobDescription && data.careerEntries.length > 0 && <EvidencePreview data={data} application={applicationDraft} />}
             {applicationDraft.aiAssessment && <div className="review-result"><strong>Assessment</strong><p>{applicationDraft.aiAssessment}</p></div>}
             {applicationDraft.resumeChangeNotes && <Field label="Recommended changes"><textarea rows={4} value={applicationDraft.resumeChangeNotes} onChange={(event) => setApplicationDraft({ ...applicationDraft, resumeChangeNotes: event.target.value })} /></Field>}
             {applicationDraft.suggestedResumeText && <><Field label="Suggested resume text"><textarea rows={14} value={applicationDraft.suggestedResumeText} onChange={(event) => setApplicationDraft({ ...applicationDraft, suggestedResumeText: event.target.value })} /></Field><button type="button" className="secondary-button" disabled={busy || data.resumes.some((item) => item.id === applicationDraft.resumeId && item.editableText === applicationDraft.suggestedResumeText)} onClick={saveSuggestedResume}>Save as resume variation</button></>}
           </section>
-
+          <section className="embedded-section full compact-role-section">
+            <div className="section-heading"><div><h3>Cover letter</h3></div><div className="button-row"><button type="button" className="secondary-button compact-button" onClick={importApplicationCoverLetter}><Icon name="upload" width="14" />Upload</button><button type="button" className="secondary-button compact-button" disabled={busy || !aiReady} title={aiReady ? "" : "Complete AI setup in Settings"} onClick={createCoverLetterForApplication}><Icon name="spark" width="14" />Create cover letter</button><button type="button" className="secondary-button compact-button" disabled={busy || !canExportApplicationCoverLetter} onClick={exportApplicationCoverLetterPdf}><Icon name="file" width="14" />Export PDF</button></div></div>
+            <div className="compact-document-control"><select value={applicationDraft.coverLetterId} onChange={(event) => setApplicationDraft({ ...applicationDraft, coverLetterId: event.target.value })}><option value="">Not selected</option>{data.coverLetters.filter((letter) => letter.companyId === applicationDraft.companyId).map((letter) => <option key={letter.id} value={letter.id}>{letter.name}</option>)}</select>{applicationDraft.coverLetterId && <button type="button" className="text-button" onClick={() => { const selected = data.coverLetters.find((item) => item.id === applicationDraft.coverLetterId); if (selected) openLetter(selected, "", true); }}>View</button>}</div>
+          </section>
           <Field label="General notes" full><textarea rows={5} value={applicationDraft.generalNotes} onChange={(event) => setApplicationDraft({ ...applicationDraft, generalNotes: event.target.value })} /></Field>
 
           {data.applications.some((item) => item.id === applicationDraft.id) && <section className="embedded-section full">
@@ -998,9 +1027,9 @@ export default function App() {
           <Field label="Category"><select value={careerDraft.category} onChange={(event) => setCareerDraft({ ...careerDraft, category: event.target.value as CareerEntryCategory })}><option value="career_work">Career work</option><option value="project">Project</option><option value="achievement">Achievement</option><option value="skill">Skill</option><option value="certification">Certification</option><option value="career_story">Career story</option></select></Field>
           <Field label="Title" required><input value={careerDraft.title} onChange={(event) => setCareerDraft({ ...careerDraft, title: event.target.value })} /></Field>
           <Field label="Organization"><input value={careerDraft.organization} onChange={(event) => setCareerDraft({ ...careerDraft, organization: event.target.value })} /></Field>
-          <Field label="Skills"><input value={careerDraft.skills} onChange={(event) => setCareerDraft({ ...careerDraft, skills: event.target.value })} placeholder="Comma-separated" /></Field>
-          <Field label="Technologies"><input value={careerDraft.technologies} onChange={(event) => setCareerDraft({ ...careerDraft, technologies: event.target.value })} /></Field>
-          <Field label="Results or metrics"><input value={careerDraft.resultsMetrics} onChange={(event) => setCareerDraft({ ...careerDraft, resultsMetrics: event.target.value })} /></Field>
+          <Field label="Skills" full><textarea rows={3} value={careerDraft.skills} onChange={(event) => setCareerDraft({ ...careerDraft, skills: event.target.value })} placeholder="Capabilities, methods, and product skills demonstrated." /></Field>
+          <Field label="Technologies" full><textarea rows={3} value={careerDraft.technologies} onChange={(event) => setCareerDraft({ ...careerDraft, technologies: event.target.value })} /></Field>
+          <Field label="Results or metrics" full><textarea rows={5} value={careerDraft.resultsMetrics} onChange={(event) => setCareerDraft({ ...careerDraft, resultsMetrics: event.target.value })} /></Field>
           <Field label="Summary" full><textarea rows={4} value={careerDraft.entrySummary} onChange={(event) => setCareerDraft({ ...careerDraft, entrySummary: event.target.value })} /></Field>
           <div className="full button-row refine-row">{data.settings.aiEnabled && <button type="button" className="secondary-button compact-button" disabled={busy} onClick={refineCareerEntrySummary}><Icon name="spark" width="15" />Refine summary</button>}</div>
           <details className="full career-description-editor">
@@ -1039,25 +1068,136 @@ export default function App() {
   );
 }
 
-function OverviewView({ data, onOpenRole }: {
+function OverviewView({ data, applications, search, setSearch, onOpenRole, onDeleteRole, onOpenCompany, onDeleteCompany }: {
   data: AppData;
+  applications: JobApplication[];
+  search: string;
+  setSearch: (value: string) => void;
   onOpenRole: (item: JobApplication) => void;
+  onDeleteRole: (item: JobApplication) => void;
+  onOpenCompany: (item: Company) => void;
+  onDeleteCompany: (item: Company) => void;
 }) {
-  const active = data.applications.filter((item) => item.status !== "success" && item.status !== "learning_experience").slice(0, 12);
-  return <div className="page-stack compact-page-stack">
-    <section className="summary-grid">{overviewStatuses.map((status) => <div className="summary-card" key={status}><span>{statusMeta[status].label}</span><strong>{data.applications.filter((item) => item.status === status).length}</strong></div>)}</section>
-    <section className="panel full-width dense-panel"><div className="panel-heading compact-heading"><div><h2>Active roles</h2></div></div>{active.length ? <div className="role-list">{active.map((item) => <RoleRow key={item.id} data={data} application={item} onClick={() => onOpenRole(item)} />)}</div> : <EmptyState title="No active roles" text="Use Add role in the header to start tracking an application." />}</section>
-  </div>;
-}
+  const groups = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const filteredIds = new Set(applications.map((item) => item.id));
+    const rolesByCompany = new Map<string, JobApplication[]>();
 
-function ApplicationsView({ data, applications, search, setSearch, onOpen, onDelete }: { data: AppData; applications: JobApplication[]; search: string; setSearch: (value: string) => void; onOpen: (item: JobApplication) => void; onDelete: (item: JobApplication) => void }) {
-  return <section className="panel full-width dense-panel"><div className="toolbar"><div className="search-box"><Icon name="search" width="16" /><input placeholder="Search company, role, job ID or status" value={search} onChange={(event) => setSearch(event.target.value)} /></div><span>{applications.length} roles</span></div>{applications.length ? <div className="data-table"><div className="table-head"><span>Role</span><span>Date</span><span>Resume</span><span>Status</span><span /></div>{applications.map((item) => <div className="table-row" key={item.id}><button className="row-main" onClick={() => onOpen(item)}><div><strong>{item.roleTitle || "Role title not recorded"}</strong><span>{companyName(data, item.companyId)}{item.jobId ? ` · ${item.jobId}` : ""}</span></div></button><span>{formatDate(item.dateApplied)}</span><span className="truncate-cell">{resumeName(data, item.resumeId)}</span><span className={`status-pill ${statusMeta[item.status].className}`}>{statusMeta[item.status].label}</span><button className="icon-button danger compact-icon" aria-label="Delete role" onClick={() => onDelete(item)}><Icon name="trash" width="14" /></button></div>)}</div> : <EmptyState title="No roles found" text={search ? "No roles match this search." : "Use Add role in the header to start tracking an application."} action={search ? "Clear search" : undefined} onAction={search ? () => setSearch("") : undefined} />}</section>;
-}
+    for (const application of data.applications) {
+      const key = application.companyId || "__unassigned__";
+      const roles = rolesByCompany.get(key) ?? [];
+      roles.push(application);
+      rolesByCompany.set(key, roles);
+    }
 
-function CompaniesView({ data, onOpen, onDelete }: { data: AppData; onOpen: (item: Company) => void; onDelete: (item: Company) => void }) {
-  return <section className="panel full-width dense-panel"><div className="panel-heading compact-heading"><div><h2>Companies</h2></div></div>{data.companies.length ? <div className="company-list">{[...data.companies].sort((a,b) => a.name.localeCompare(b.name)).map((company) => <div className="company-row" key={company.id}><strong>{company.name}</strong><div><button className="icon-button compact-icon" aria-label={`Edit ${company.name}`} onClick={() => onOpen(company)}><Icon name="edit" width="14" /></button><button className="icon-button danger compact-icon" aria-label={`Delete ${company.name}`} onClick={() => onDelete(company)}><Icon name="trash" width="14" /></button></div></div>)}</div> : <EmptyState title="No companies" text="Use Add company in the header to create your first company." />}</section>;
-}
+    const companyGroups = data.companies
+      .map((company) => {
+        const allRoles = [...(rolesByCompany.get(company.id) ?? [])];
+        const visibleRoles = query
+          ? allRoles.filter((role) =>
+              filteredIds.has(role.id) ||
+              company.name.toLowerCase().includes(query)
+            )
+          : allRoles;
 
+        const companyMatches = !query || company.name.toLowerCase().includes(query);
+        if (query && !companyMatches && visibleRoles.length === 0) return null;
+
+        const roles = (companyMatches && query ? allRoles : visibleRoles).sort((a, b) => {
+          const aIsApplied = a.status !== "preparing" && Boolean(a.dateApplied);
+          const bIsApplied = b.status !== "preparing" && Boolean(b.dateApplied);
+          if (aIsApplied !== bIsApplied) return bIsApplied ? 1 : -1;
+          if (aIsApplied && bIsApplied && a.dateApplied !== b.dateApplied) {
+            return b.dateApplied.localeCompare(a.dateApplied);
+          }
+          return a.roleTitle.localeCompare(b.roleTitle);
+        });
+
+        const latestApplicationDate = allRoles
+          .filter((item) => item.status !== "preparing" && item.dateApplied)
+          .map((item) => item.dateApplied)
+          .sort((a, b) => b.localeCompare(a))[0] ?? "";
+
+        return {
+          company: company as Company | undefined,
+          companyId: company.id,
+          companyLabel: company.name || "Unnamed company",
+          roles,
+          totalRoles: allRoles.length,
+          latestApplicationDate,
+          hasPreparing: allRoles.some((item) => item.status === "preparing"),
+          sortTier: latestApplicationDate ? 0 : allRoles.length ? 1 : 2,
+        };
+      })
+      .filter((group): group is NonNullable<typeof group> => Boolean(group));
+
+    const unassignedAll = [...(rolesByCompany.get("__unassigned__") ?? [])];
+    const unassignedVisible = query
+      ? unassignedAll.filter((item) => filteredIds.has(item.id))
+      : unassignedAll;
+
+    if (unassignedVisible.length) {
+      const latestApplicationDate = unassignedAll
+        .filter((item) => item.status !== "preparing" && item.dateApplied)
+        .map((item) => item.dateApplied)
+        .sort((a, b) => b.localeCompare(a))[0] ?? "";
+
+      companyGroups.push({
+        company: undefined,
+        companyId: "__unassigned__",
+        companyLabel: "Company not selected",
+        roles: unassignedVisible,
+        totalRoles: unassignedAll.length,
+        latestApplicationDate,
+        hasPreparing: unassignedAll.some((item) => item.status === "preparing"),
+        sortTier: latestApplicationDate ? 0 : 1,
+      });
+    }
+
+    return companyGroups.sort((a, b) => {
+      if (a.sortTier !== b.sortTier) return a.sortTier - b.sortTier;
+      if (a.sortTier === 0 && a.latestApplicationDate !== b.latestApplicationDate) {
+        return b.latestApplicationDate.localeCompare(a.latestApplicationDate);
+      }
+      return a.companyLabel.localeCompare(b.companyLabel);
+    });
+  }, [applications, data.applications, data.companies, search]);
+
+  return <section className="panel full-width dense-panel overview-role-panel">
+    <div className="summary-grid overview-summary-grid">
+      {(["preparing", "applied", "in_process", "learning_experience"] as ApplicationStatus[]).map((status) => <div className="summary-card" key={status}><span>{statusMeta[status].label}</span><strong>{data.applications.filter((item) => item.status === status).length}</strong></div>)}
+    </div>
+    <div className="toolbar">
+      <div className="search-box"><Icon name="search" width="16" /><input placeholder="Search company, role, job ID or status" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
+      <span>{data.companies.length} compan{data.companies.length === 1 ? "y" : "ies"} | {data.applications.length} role{data.applications.length === 1 ? "" : "s"}</span>
+    </div>
+    {groups.length ? <div className="overview-company-list">{groups.map((group) => <details className="company-role-group" key={group.companyId}>
+      <summary>
+        <div className="company-summary-main">
+          {group.company ? <button type="button" className="overview-company-name" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpenCompany(group.company!); }}>{group.companyLabel}</button> : <strong>{group.companyLabel}</strong>}
+          <span>{group.totalRoles} role{group.totalRoles === 1 ? "" : "s"}</span>
+        </div>
+        <div className="company-summary-meta">
+          {group.hasPreparing && <span className={`status-pill ${statusMeta.preparing.className}`}>{statusMeta.preparing.label}</span>}
+          {group.latestApplicationDate && <span className="company-last-applied">Last applied {formatDate(group.latestApplicationDate)}</span>}
+          {group.company && <button type="button" className="icon-button danger compact-icon overview-company-delete" aria-label={`Delete ${group.companyLabel}`} onClick={(event) => { event.preventDefault(); event.stopPropagation(); onDeleteCompany(group.company!); }}><Icon name="trash" width="12" /></button>}
+        </div>
+      </summary>
+      <div className="company-role-body">
+        {group.roles.length ? <>
+          <div className="company-role-head"><span>Role</span><span>Resume</span><span>Date</span><span>Status</span><span /></div>
+          {group.roles.map((item) => <div className="overview-role-row" key={item.id}>
+            <button type="button" className="overview-role-main" onClick={() => onOpenRole(item)}><strong>{item.roleTitle || "Role title not recorded"}</strong><span>{[item.jobId ? `Job ${item.jobId}` : "", item.location].filter(Boolean).join(" | ")}</span></button>
+            <span className="truncate-cell">{item.resumeId ? resumeName(data, item.resumeId) : currentResume(data)?.name || "Not selected"}</span>
+            <span>{item.status === "preparing" ? "Not applied" : formatDate(item.dateApplied)}</span>
+            <span className={`status-pill ${statusMeta[item.status].className}`}>{statusMeta[item.status].label}</span>
+            <button type="button" className="icon-button danger compact-icon" aria-label="Delete role" onClick={() => onDeleteRole(item)}><Icon name="trash" width="14" /></button>
+          </div>)}
+        </> : <div className="company-no-roles">No roles yet.</div>}
+      </div>
+    </details>)}</div> : <EmptyState title="No companies found" text={search ? "No companies or roles match this search." : "Use Add company in the header to create your first company."} action={search ? "Clear search" : undefined} onAction={search ? () => setSearch("") : undefined} />}
+  </section>;
+}
 function DocumentsView(props: {
   data: AppData;
   onUploadCurrent: () => void;
@@ -1472,9 +1612,7 @@ function EvidencePreview({ data, application }: { data: AppData; application: Jo
   return <div className="evidence-preview"><strong>Career evidence selected locally</strong><div>{matches.map((match) => { const entry = data.careerEntries.find((item) => item.id === match.entryId); return entry ? <span key={match.entryId}>{entry.title}<em>{match.score}% relevance</em></span> : null; })}</div></div>;
 }
 
-function RoleRow({ data, application, onClick }: { data: AppData; application: JobApplication; onClick: () => void }) {
-  return <button className="role-row" onClick={onClick}><div className="role-row-main"><strong>{application.roleTitle || "Role title not recorded"}</strong><span>{companyName(data, application.companyId)}{application.jobId ? ` · ${application.jobId}` : ""}</span></div><span className={`status-pill ${statusMeta[application.status].className}`}>{statusMeta[application.status].label}</span><Icon name="arrow" width="14" /></button>;
-}
+
 
 function DocumentRow({ title, subtitle, current = false, onOpen, onSetCurrent, onDelete }: { title: string; subtitle: string; current?: boolean; onOpen: () => void; onSetCurrent?: () => void; onDelete: () => void }) {
   return <div className="document-row"><div className="document-icon"><Icon name="file" width="19" /></div><div><strong>{title}</strong><span>{subtitle}</span></div>{current && <span className="current-badge">Current</span>}{!current && onSetCurrent && <button className="text-button" onClick={onSetCurrent}>Set current</button>}<button className="icon-button" onClick={onOpen}><Icon name="edit" width="15" /></button><button className="icon-button danger" onClick={onDelete}><Icon name="trash" width="15" /></button></div>;

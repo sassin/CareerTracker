@@ -163,6 +163,7 @@ export interface AppSettings {
   companyHeadquartersMaxWords: number;
   resumeMaxGrowthPercent: number;
   coverLetterMaxWords: number;
+  generatedCoverLetterIds: string[];
   companyDetailsSystemPrompt: string;
   careerEntrySummarySystemPrompt: string;
   careerEntryDescriptionSystemPrompt: string;
@@ -252,6 +253,7 @@ export const emptySettings: AppSettings = {
   companyHeadquartersMaxWords: 12,
   resumeMaxGrowthPercent: 20,
   coverLetterMaxWords: 350,
+  generatedCoverLetterIds: [],
   companyDetailsSystemPrompt: DEFAULT_COMPANY_DETAILS_PROMPT,
   careerEntrySummarySystemPrompt: DEFAULT_CAREER_ENTRY_SUMMARY_PROMPT,
   careerEntryDescriptionSystemPrompt: DEFAULT_CAREER_ENTRY_DESCRIPTION_PROMPT,

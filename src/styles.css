@@ -857,3 +857,314 @@ summary:focus-visible {
   box-shadow: none;
   transform: none;
 }
+
+/* Combined Overview + Role editor update */
+.overview-role-panel { padding-top: 10px; }
+.overview-company-list { display: grid; }
+.company-role-group {
+  border-top: 1px solid #e6e9e6;
+}
+.company-role-group:first-child { border-top: 0; }
+.company-role-group > summary {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 18px;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 4px;
+  cursor: pointer;
+  list-style: none;
+}
+.company-role-group > summary::-webkit-details-marker { display: none; }
+.company-role-group > summary::after {
+  content: "";
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform .15s ease;
+}
+.company-role-group[open] > summary::after { transform: rotate(90deg); }
+.company-role-group > summary:hover { background: #f7f9f7; }
+.company-summary-main { min-width: 0; }
+.company-summary-main strong {
+  display: block;
+  overflow: hidden;
+  color: #292d29;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.company-summary-main span {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.company-summary-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  white-space: nowrap;
+}
+.company-last-applied {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.company-role-body {
+  padding: 0 4px 6px 16px;
+  border-top: 1px solid #edf0ed;
+  background: #fbfcfb;
+}
+.company-role-head,
+.overview-role-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) minmax(130px, .8fr) minmax(110px, .65fr) minmax(110px, .65fr) 30px;
+  align-items: center;
+  gap: 10px;
+}
+.company-role-head {
+  min-height: 30px;
+  color: #747a75;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+.overview-role-row {
+  min-height: 46px;
+  border-top: 1px solid #edf0ed;
+  font-size: 11px;
+}
+.overview-role-main {
+  min-width: 0;
+  padding: 4px 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  text-align: left;
+}
+.overview-role-main strong {
+  display: block;
+  overflow: hidden;
+  color: #292d29;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.overview-role-main span {
+  display: block;
+  min-height: 14px;
+  margin-top: 1px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.overview-role-main:hover strong { color: var(--sage-dark); }
+
+.role-job-description {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-soft);
+}
+.role-job-description > summary {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+.role-job-description > summary::-webkit-details-marker { display: none; }
+.role-job-description > summary::after {
+  content: "+";
+  color: var(--sage);
+  font-size: 16px;
+}
+.role-job-description[open] > summary::after { content: "âˆ’"; }
+.role-job-description > summary strong { display: block; font-size: 12px; }
+.role-job-description > summary span {
+  display: block;
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.role-job-description-body {
+  padding: 9px;
+  border-top: 1px solid var(--line);
+  background: white;
+}
+.role-job-description-body textarea { width: 100%; }
+.resume-assessment-section { margin-top: -2px; }
+.resume-assessment-section .field { width: 100%; }
+
+.career-entry-form textarea { resize: vertical; }
+
+@media (max-width: 1120px) {
+  .company-role-head,
+  .overview-role-row {
+    grid-template-columns: minmax(220px, 1.5fr) minmax(110px, .75fr) minmax(100px, .65fr) minmax(105px, .65fr) 30px;
+  }
+}
+
+/* Overview compactness + safe chevron fix */
+.overview-summary-grid {
+  margin-bottom: 8px;
+}
+.overview-summary-grid .summary-card {
+  min-height: 38px;
+  padding: 5px 9px;
+}
+.overview-summary-grid .summary-card span {
+  font-size: 11px;
+}
+.overview-summary-grid .summary-card strong {
+  font-size: 18px;
+}
+
+.overview-role-panel {
+  padding: 9px 11px;
+}
+.overview-role-panel .toolbar {
+  margin-bottom: 4px;
+}
+.overview-role-panel .search-box input {
+  height: 30px;
+}
+
+.company-role-group > summary {
+  min-height: 34px;
+  grid-template-columns: minmax(0, 1fr) auto 14px;
+  gap: 8px;
+  padding: 2px 2px;
+}
+.company-summary-main {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+.company-summary-main strong {
+  display: inline;
+  font-size: 12px;
+}
+.company-summary-main span {
+  display: inline;
+  flex: 0 0 auto;
+  margin-top: 0;
+  font-size: 10px;
+}
+.company-summary-meta {
+  gap: 7px;
+}
+.company-last-applied {
+  font-size: 10px;
+}
+.company-role-group > summary .status-pill {
+  padding: 2px 6px;
+  font-size: 9.5px;
+}
+
+/* Draw the expansion chevron with borders instead of a text character.
+   This avoids encoding corruption from text glyphs. */
+.company-role-group > summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid #708078;
+  border-bottom: 1.5px solid #708078;
+  transform: rotate(-45deg);
+  transform-origin: center;
+  transition: transform .15s ease;
+  justify-self: center;
+}
+.company-role-group[open] > summary::after {
+  transform: rotate(45deg);
+}
+
+.company-role-body {
+  padding: 0 2px 3px 12px;
+}
+.company-role-head,
+.overview-role-row {
+  grid-template-columns: minmax(190px, 1.55fr) minmax(110px, .75fr) 92px 96px 26px;
+  gap: 7px;
+}
+.company-role-head {
+  min-height: 23px;
+  font-size: 9px;
+}
+.overview-role-row {
+  min-height: 34px;
+  font-size: 10.5px;
+}
+.overview-role-main {
+  padding: 1px 0;
+}
+.overview-role-main strong {
+  font-size: 11.5px;
+}
+.overview-role-main span {
+  min-height: 11px;
+  margin-top: 0;
+  font-size: 9.5px;
+}
+.overview-role-row .status-pill {
+  padding: 2px 5px;
+  font-size: 9.5px;
+}
+.overview-role-row .compact-icon {
+  width: 24px;
+  height: 24px;
+}
+
+@media (max-width: 1120px) {
+  .company-role-head,
+  .overview-role-row {
+    grid-template-columns: minmax(175px, 1.45fr) minmax(100px, .7fr) 88px 92px 25px;
+    gap: 6px;
+  }
+}
+
+/* Overview company management + zero-role companies */
+.overview-company-name {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: #292d29;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.overview-company-name:hover {
+  color: var(--sage-dark);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.overview-company-delete {
+  width: 22px !important;
+  height: 22px !important;
+  opacity: .72;
+}
+.company-no-roles {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: 10px;
+}
